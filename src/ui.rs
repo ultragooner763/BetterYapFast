@@ -61,6 +61,7 @@ mod shell;
 mod theme;
 mod tiles;
 mod title_bar;
+mod wallpaper;
 mod yapfast;
 
 use callbacks::bind_callbacks;
@@ -304,7 +305,7 @@ fn watch_window(window: &YapfastWindow, adapter: &Rc<RefCell<Adapter>>) {
     use slint::winit_030::{
         EventResult,
         winit::{
-            event::{ElementState, KeyEvent, WindowEvent},
+            event::{ElementState, KeyEvent, MouseButton, WindowEvent},
             keyboard::{Key, KeyCode, NamedKey, PhysicalKey},
         },
     };
@@ -623,6 +624,53 @@ fn watch_window(window: &YapfastWindow, adapter: &Rc<RefCell<Adapter>>) {
                         });
                     }
                     return EventResult::PreventDefault;
+                }
+                // Mouse side buttons (Back and Forward) navigate through conversations,
+                // or close modals/settings on Back.
+                if let WindowEvent::MouseInput {
+                    state: ElementState::Pressed,
+                    button,
+                    ..
+                } = event
+                    && let Some(window) = weak.upgrade()
+                {
+                    match button {
+                        MouseButton::Back | MouseButton::Other(1) | MouseButton::Other(8) => {
+                            if window.get_settings_open() {
+                                window.set_settings_open(false);
+                                return EventResult::PreventDefault;
+                            }
+                            if window.get_viewer_open() {
+                                window.set_viewer_open(false);
+                                return EventResult::PreventDefault;
+                            }
+                            if window.get_workspace() {
+                                let (adapter, weak) = (adapter.clone(), weak.clone());
+                                slint::Timer::single_shot(Duration::ZERO, move || {
+                                    if let (Some(adapter), Some(window)) =
+                                        (adapter.upgrade(), weak.upgrade())
+                                    {
+                                        adapter.borrow_mut().action(&window, Action::NavigateBack);
+                                    }
+                                });
+                                return EventResult::PreventDefault;
+                            }
+                        }
+                        MouseButton::Forward | MouseButton::Other(2) | MouseButton::Other(9) => {
+                            if window.get_workspace() && !window.get_settings_open() {
+                                let (adapter, weak) = (adapter.clone(), weak.clone());
+                                slint::Timer::single_shot(Duration::ZERO, move || {
+                                    if let (Some(adapter), Some(window)) =
+                                        (adapter.upgrade(), weak.upgrade())
+                                    {
+                                        adapter.borrow_mut().action(&window, Action::NavigateForward);
+                                    }
+                                });
+                                return EventResult::PreventDefault;
+                            }
+                        }
+                        _ => {}
+                    }
                 }
                 let step = match outcome {
                     zoom::Outcome::Pass => return EventResult::Propagate,
@@ -1190,6 +1238,12 @@ struct Layout {
     system_title_bar: Option<bool>,
     /// Where the window was when Yapfast last ran, and how big.
     window: Option<placement::Placement>,
+    /// Custom wallpaper settings and collection.
+    wallpaper_enabled: Option<bool>,
+    wallpaper_path: Option<String>,
+    wallpaper_blur: Option<f32>,
+    wallpaper_dim: Option<f32>,
+    wallpapers: Vec<String>,
 }
 
 /// Yapfast's sounds start as they're made: 12 dB under full scale at the loudest.
@@ -1484,6 +1538,15 @@ impl Layout {
         window.set_multiple_windows(self.multiple_windows);
         window.set_developer_mode(self.developer_mode);
         title_bar::show(window, self.system_title_bar);
+        let wp_enabled = self.wallpaper_enabled.unwrap_or_else(|| self.wallpaper_path.is_some());
+        wallpaper::init(
+            window,
+            wp_enabled,
+            self.wallpaper_path.as_deref(),
+            self.wallpaper_blur.unwrap_or(12.0),
+            self.wallpaper_dim.unwrap_or(0.40),
+            &self.wallpapers,
+        );
         let each: Vec<i32> = Sound::ALL
             .iter()
             .map(|sound| self.each_sound.get(sound).copied().unwrap_or(100).into())

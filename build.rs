@@ -14,6 +14,8 @@ use std::{
 mod emoji_font_tables;
 
 fn main() {
+    println!("cargo:rerun-if-changed=packaging/windows/yapfast.ico");
+    println!("cargo:rerun-if-changed=packaging/windows/yapfast.rc");
     println!("cargo:rerun-if-changed=packaging/windows");
     println!("cargo:rerun-if-env-changed=SKIA_BINARIES_URL");
     println!("cargo:rerun-if-changed=vendor/twemoji/72x72");

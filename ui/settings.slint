@@ -3,7 +3,7 @@ import { SettingsNavigation } from "yapfast/settings-nav.slint";
 import { ClientStyle } from "yapfast/style.slint";
 import { ComboBox } from "std-widgets.slint";
 import { ScrollView } from "scrollview.slint";
-import { Theme, Middle, Label, Tip, Popup, Looks } from "theme.slint";
+import { Theme, Middle, Label, Tip, Popup, Looks, Wallpaper } from "theme.slint";
 import { ActionButton, IconButton, Avatar, SensitivitySlider, VolumeSlider, TextField, StatusText, AccountLook } from "controls.slint";
 import { DiscordLinkPanel } from "discord.slint";
 import { ChannelRow } from "rail.slint";
@@ -976,6 +976,116 @@ export component AppearanceSettings inherits VerticalLayout {
     }
     if !root.editor: VerticalLayout {
         spacing: 12px;
+        Rectangle { height: 1px; background: Theme.line; }
+        VerticalLayout {
+            spacing: 12px;
+            SettingsHeading { text: "CUSTOM WALLPAPER"; }
+            SettingsSwitch {
+                text: "Use custom wallpaper";
+                description: "Display a custom background image behind chats and sidebars.";
+                checked <=> Wallpaper.enabled;
+                toggled(enabled) => {
+                    Wallpaper.enabled-toggled(enabled);
+                    root.preferences-changed();
+                }
+            }
+            if Wallpaper.enabled: VerticalLayout {
+                spacing: 14px;
+                if Wallpaper.list.length > 0: VerticalLayout {
+                    spacing: 8px;
+                    Text { text: "COLLECTION"; color: Theme.muted; font-size: 11px; font-weight: 700; letter-spacing: 0.6px; }
+                    HorizontalLayout {
+                        spacing: 10px;
+                        alignment: start;
+                        for tile[index] in Wallpaper.list: Rectangle {
+                            width: 120px;
+                            height: 72px;
+                            border-radius: 6px;
+                            border-width: index == Wallpaper.active-index ? 2px : 1px;
+                            border-color: index == Wallpaper.active-index ? Theme.accent : tile-touch.has-hover ? Theme.faint : Theme.line;
+                            clip: true;
+                            background: Theme.sunken;
+                            Image {
+                                width: parent.width;
+                                height: parent.height;
+                                source: tile.preview;
+                                image-fit: cover;
+                            }
+                            tile-touch := TouchArea {
+                                mouse-cursor: MouseCursor.pointer;
+                                clicked => { Wallpaper.select(index); }
+                            }
+                            if index == Wallpaper.active-index: Rectangle {
+                                x: 6px; y: 6px; width: 20px; height: 20px; border-radius: 10px; background: Theme.accent;
+                                Image {
+                                    x: 4px; y: 4px; width: 12px; height: 12px;
+                                    source: @image-url("icons/check.svg");
+                                    colorize: Theme.on-accent;
+                                }
+                            }
+                            del-btn := Rectangle {
+                                x: parent.width - 24px; y: 6px; width: 18px; height: 18px; border-radius: 9px;
+                                background: del-touch.has-hover ? Theme.danger : #000000cc;
+                                visible: tile-touch.has-hover || del-touch.has-hover;
+                                Image {
+                                    x: 4px; y: 4px; width: 10px; height: 10px;
+                                    source: @image-url("icons/x.svg");
+                                    colorize: #ffffff;
+                                }
+                                del-touch := TouchArea {
+                                    mouse-cursor: MouseCursor.pointer;
+                                    clicked => { Wallpaper.remove(index); }
+                                }
+                            }
+                        }
+                    }
+                }
+                HorizontalLayout {
+                    spacing: 10px;
+                    ActionButton {
+                        text: "Add Wallpaper";
+                        icon: @image-url("icons/circle-plus.svg");
+                        clicked => { Wallpaper.choose(); }
+                    }
+                }
+                VerticalLayout {
+                    spacing: 12px;
+                    VerticalLayout {
+                        spacing: 4px;
+                        VolumeSlider {
+                            label: "Darkening / Dimming";
+                            value: Math.round(Wallpaper.dim * 100);
+                            maximum: 95;
+                            step: 1;
+                            full-mark: false;
+                            shown: self.value + "%";
+                            changed(val) => {
+                                Wallpaper.dim = val / 100;
+                                Wallpaper.dim-changed(Wallpaper.dim);
+                            }
+                            committed => { root.preferences-changed(); }
+                        }
+                    }
+                    VerticalLayout {
+                        spacing: 4px;
+                        VolumeSlider {
+                            label: "Blur (0 - 80 px)";
+                            value: Math.round(Wallpaper.blur);
+                            maximum: 80;
+                            step: 1;
+                            full-mark: false;
+                            shown: self.value + " px";
+                            changed(val) => {
+                                Wallpaper.blur = val;
+                                Wallpaper.blur-changed(Wallpaper.blur);
+                            }
+                            committed => { root.preferences-changed(); }
+                        }
+                    }
+                }
+            }
+        }
+        Rectangle { height: 1px; background: Theme.line; }
         SettingsHeading { text: "PROFILES"; }
         SettingsSwitch {
             text: "Play profile effects";

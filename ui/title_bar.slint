@@ -1,4 +1,4 @@
-import { Theme } from "theme.slint";
+import { Theme, Wallpaper } from "theme.slint";
 
 // One of the title bar's window buttons: a glyph on a ground that shows on hover.
 component WindowButton inherits Rectangle {
@@ -33,7 +33,7 @@ export component TitleBar inherits Rectangle {
     callback maximize-window;
     callback close-window;
     height: 32px;
-    background: Theme.rail;
+    background: Wallpaper.enabled ? #111215b0 : Theme.rail;
     // Armed by a press, so that one press moves the window once: the desktop
     // takes the pointer for the move and Slint may not see the release.
     property <bool> armed;

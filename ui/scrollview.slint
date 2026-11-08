@@ -30,8 +30,8 @@ component ScrollBarButton inherits TouchArea {
         colorize: Theme.dark ? #FFFFFF14 : #00000073;
         accessible-role: none;
 
-        animate colorize, opacity { duration: 150ms; }
-        animate width, height { duration: 150ms; easing: ease-out; }
+        animate colorize, opacity { duration: 180ms; easing: ease-out; }
+        animate width, height { duration: 180ms; easing: ease-out; }
     }
 
     states [
@@ -81,7 +81,7 @@ component ScrollBar inherits Rectangle {
         }
     ]
 
-    animate size { duration: 150ms; easing: ease-out; }
+    animate size { duration: 180ms; easing: ease-out; }
 
     // A ListView's rows, measured as they come into view, change its estimate of
     // their height all through a drag; the thumb stays with the pointer.
@@ -95,7 +95,7 @@ component ScrollBar inherits Rectangle {
         border-radius: (root.horizontal ? self.height : self.width) / 2;
         background: Theme.dark ? #FFFFFF14 : #00000073;
 
-        animate width, height { duration: 150ms; easing: ease-out; }
+        animate width, height { duration: 180ms; easing: ease-out; }
     }
 
     touch-area := TouchArea {

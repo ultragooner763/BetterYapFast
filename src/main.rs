@@ -75,8 +75,21 @@ fn fix_mmap_threshold() {
     }
 }
 
+#[cfg(all(windows, feature = "desktop"))]
+fn set_high_resolution_timer() {
+    #[link(name = "winmm")]
+    unsafe extern "system" {
+        fn timeBeginPeriod(uPeriod: u32) -> u32;
+    }
+    unsafe {
+        timeBeginPeriod(1);
+    }
+}
+
 fn main() -> Result<()> {
     fix_mmap_threshold();
+    #[cfg(all(windows, feature = "desktop"))]
+    set_high_resolution_timer();
     // A stream worker starts nothing else: no UI, runtime or TLS.
     #[cfg(feature = "discord")]
     if std::env::args().nth(1).as_deref() == Some(yapfast_core::stream_worker::ARGUMENT) {

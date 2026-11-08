@@ -1,4 +1,4 @@
-import { Theme, Tip, Middle } from "../theme.slint";
+import { Theme, Tip, Middle, Wallpaper } from "../theme.slint";
 
 // Use the existing move/resize/close callbacks, including close-to-tray.
 component CaptionButton inherits Rectangle {
@@ -84,7 +84,7 @@ export component WindowBar inherits Rectangle {
     callback minimize-window;
     callback maximize-window;
     callback close-window;
-    height: 32px; background: Theme.rail;
+    height: 32px; background: Wallpaper.enabled ? #111215b0 : Theme.rail;
     property <bool> armed;
     TouchArea {
         pointer-event(event) => {

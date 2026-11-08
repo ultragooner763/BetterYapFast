@@ -68,7 +68,7 @@ export global Theme {
     in-out property <color> avatar: #6b7280;
     /// Whether the theme is dark, for the std-widgets that follow the system's scheme.
     in-out property <bool> dark: true;
-    out property <duration> quick: 120ms;
+    out property <duration> quick: 200ms;
 }
 
 // One tooltip for the whole window, drawn above everything else.
@@ -143,7 +143,7 @@ export global Popup {
     /// fading card into a layer as large as what changed, which is the
     /// whole window under a dimmed backdrop, so there the card only grows.
     in property <bool> fade: true;
-    out property <duration> duration: 100ms;
+    out property <duration> duration: 180ms;
     /// The card's size and opacity for how far it's open, from 0 to 1.
     public pure function scale(amount: float) -> float { 0.8 + 0.2 * amount }
     public pure function opacity(amount: float) -> float { root.fade ? amount : (amount > 0 ? 1 : 0) }
@@ -158,5 +158,27 @@ export component PopupMotion {
     out property <bool> shown: self.open || self.amount > 0;
     init => { if self.open { self.amount = 1; } }
     changed open => { self.amount = self.open ? 1 : 0; }
-    animate amount { duration: Popup.duration; easing: ease-out-quad; }
+    animate amount { duration: Popup.duration; easing: cubic-bezier(0.16, 1, 0.3, 1); }
+}
+
+export struct WallpaperTile {
+    id: string,
+    path: string,
+    preview: image,
+}
+
+export global Wallpaper {
+    in-out property <bool> enabled: false;
+    in-out property <image> image;
+    in-out property <float> blur: 12;
+    in-out property <float> dim: 0.40;
+    in-out property <string> path: "";
+    in-out property <[WallpaperTile]> list: [];
+    in-out property <int> active-index: -1;
+    callback enabled-toggled(bool);
+    callback choose();
+    callback select(int);
+    callback remove(int);
+    callback blur-changed(float);
+    callback dim-changed(float);
 }

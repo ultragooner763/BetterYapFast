@@ -140,9 +140,10 @@ impl AndroidFlick {
         }
         let t = elapsed.as_secs_f32() / self.duration.as_secs_f32();
         if self.wheel {
+            const WHEEL_DECEL_RATE: f32 = 1.75;
             (
-                self.distance * (1. - (1. - t).powf(self.deceleration_rate)),
-                self.data.initial_velocity * (1. - t).powf(self.deceleration_rate - 1.),
+                self.distance * (1. - (1. - t).powf(WHEEL_DECEL_RATE)),
+                self.data.initial_velocity * (1. - t).powf(WHEEL_DECEL_RATE - 1.),
             )
         } else {
             let (position, slope) = spline::sample(t);

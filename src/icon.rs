@@ -47,14 +47,25 @@ mod platform {
     /// The title bar's small icon and the taskbar's large one, each loaded at
     /// the size Windows draws it rather than scaled from one picture.
     pub fn attributes(attributes: WindowAttributes) -> WindowAttributes {
-        let icon = |metric: SYSTEM_METRICS_INDEX| {
+        let res_icon = |metric: SYSTEM_METRICS_INDEX| {
             // SAFETY: GetSystemMetrics only reads a setting.
             let side = unsafe { GetSystemMetrics(metric) } as u32;
             Icon::from_resource(ICON, Some(PhysicalSize::new(side, side))).ok()
         };
+        let fallback_icon = || {
+            let bytes = include_bytes!("../packaging/windows/yapfast.ico");
+            image::load_from_memory_with_format(bytes, image::ImageFormat::Ico)
+                .ok()
+                .and_then(|img| {
+                    let rgba = img.to_rgba8();
+                    Icon::from_rgba(rgba.to_vec(), rgba.width(), rgba.height()).ok()
+                })
+        };
+        let win_icon = res_icon(SM_CXSMICON).or_else(fallback_icon);
+        let task_icon = res_icon(SM_CXICON).or_else(fallback_icon);
         attributes
-            .with_window_icon(icon(SM_CXSMICON))
-            .with_taskbar_icon(icon(SM_CXICON))
+            .with_window_icon(win_icon)
+            .with_taskbar_icon(task_icon)
     }
 }
 

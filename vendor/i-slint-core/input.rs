@@ -1177,19 +1177,19 @@ impl InternalKeyEvent {
         if self.key_event.modifiers.control && !self.key_event.modifiers.shift {
             match text.as_str() {
                 #[cfg(not(target_arch = "wasm32"))]
-                "c" => Some(StandardShortcut::Copy),
+                "c" | "\u{3}" | "с" => Some(StandardShortcut::Copy),
                 #[cfg(not(target_arch = "wasm32"))]
-                "x" => Some(StandardShortcut::Cut),
+                "x" | "\u{18}" | "ч" => Some(StandardShortcut::Cut),
                 #[cfg(not(target_arch = "wasm32"))]
-                "v" => Some(StandardShortcut::Paste),
-                "a" => Some(StandardShortcut::SelectAll),
-                "f" => Some(StandardShortcut::Find),
-                "s" => Some(StandardShortcut::Save),
-                "p" => Some(StandardShortcut::Print),
-                "z" => Some(StandardShortcut::Undo),
+                "v" | "\u{16}" | "м" => Some(StandardShortcut::Paste),
+                "a" | "\u{1}" | "ф" => Some(StandardShortcut::SelectAll),
+                "f" | "\u{6}" | "а" => Some(StandardShortcut::Find),
+                "s" | "\u{13}" | "ы" | "і" => Some(StandardShortcut::Save),
+                "p" | "\u{10}" | "з" => Some(StandardShortcut::Print),
+                "z" | "\u{1a}" | "я" => Some(StandardShortcut::Undo),
                 #[cfg(target_os = "windows")]
-                "y" => Some(StandardShortcut::Redo),
-                "r" => Some(StandardShortcut::Refresh),
+                "y" | "\u{19}" | "н" => Some(StandardShortcut::Redo),
+                "r" | "\u{12}" | "к" => Some(StandardShortcut::Refresh),
                 _ => None,
             }
         } else if self.key_event.modifiers.control && self.key_event.modifiers.shift {

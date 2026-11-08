@@ -1,6 +1,6 @@
 import { ClientStyle } from "yapfast/style.slint";
 import { ScrollView, ListView } from "scrollview.slint";
-import { Theme, Middle, Label, Tip, BadgeTip } from "theme.slint";
+import { Theme, Middle, Label, Tip, BadgeTip, Wallpaper } from "theme.slint";
 import { ActionButton, IconButton, Avatar, Nameplate, StatusText, StyledName, NameStyleRow, EffectLayer, ProfileEffect, PictureStore, TextField, ServerTagChip, TipIcon } from "controls.slint";
 import { StatusDot } from "rail.slint";
 import { BotTag } from "messages.slint";
@@ -115,7 +115,7 @@ export component MemberPanel inherits Rectangle {
     /// A member was right-clicked: their id, and where in the window.
     callback open-member-menu(string, length, length);
     // Discord's member list sits on the conversation's ground, a faint line on its left.
-    background: ClientStyle.enabled ? Theme.chat : Theme.sidebar;
+    background: Wallpaper.enabled ? #131418bf : (ClientStyle.enabled ? Theme.chat : Theme.sidebar);
     accessible-role: list;
     accessible-label: "Members";
     if ClientStyle.enabled: Rectangle { x: 0px; width: 1px; background: Theme.outline-chat; }
@@ -607,10 +607,10 @@ export component BadgeTipCard inherits Rectangle {
     // It pops up: fades in and grows from the caret, as Discord's does.
     property <bool> shown: false;
     opacity: root.shown ? 1 : 0;
-    animate opacity { duration: 120ms; easing: ease-out; }
+    animate opacity { duration: 180ms; easing: ease-out; }
     transform-scale: root.shown ? 1 : 0.95;
     transform-origin: { x: self.width / 2, y: self.height };
-    animate transform-scale { duration: 120ms; easing: ease-out; }
+    animate transform-scale { duration: 180ms; easing: ease-out; }
     Timer {
         interval: 16ms;
         running: true;
@@ -913,7 +913,7 @@ export component ProfileCard inherits Rectangle {
     // banner's end, inside a 2px border that is the same two colours at
     // full strength.
     property <bool> themed: root.data.has-theme;
-    property <color> plain-ground: root.docked && ClientStyle.enabled ? Theme.panel : Theme.sidebar;
+    property <color> plain-ground: root.docked && ClientStyle.enabled ? (Wallpaper.enabled ? #111215cc : Theme.panel) : (Wallpaper.enabled ? #131418cc : Theme.sidebar);
     property <color> theme-start: root.data.theme-primary.mix(#000000, 0.4);
     property <color> theme-end: root.data.theme-secondary.mix(#000000, 0.4);
     /// What lies behind the avatar's ring, where the banner ends.

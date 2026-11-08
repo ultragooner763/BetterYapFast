@@ -135,13 +135,13 @@ export component Composer inherits Rectangle {
                 root.accepted();
                 return accept;
             }
-            if (event.text == "v" || event.text == "V") && event.modifiers.control && !event.modifiers.alt && root.enabled {
+            if (event.text == "v" || event.text == "V" || event.text == "м" || event.text == "М" || event.text == "\u{16}") && event.modifiers.control && !event.modifiers.alt && root.enabled {
                 root.paste();
                 return accept;
             }
-            if (event.text == "g" || event.text == "G" || event.text == "e" || event.text == "E")
+            if (event.text == "g" || event.text == "G" || event.text == "п" || event.text == "П" || event.text == "e" || event.text == "E" || event.text == "у" || event.text == "У")
                 && event.modifiers.control && !event.modifiers.alt && !event.modifiers.shift && root.enabled {
-                root.expressions(event.text == "g" || event.text == "G" ? 0 : 1);
+                root.expressions(event.text == "g" || event.text == "G" || event.text == "п" || event.text == "П" ? 0 : 1);
                 return accept;
             }
             return reject;

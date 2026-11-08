@@ -231,6 +231,7 @@ pub(super) fn bind_callbacks(window: &YapfastWindow, adapter: &Rc<RefCell<Adapte
     super::server_settings::bind(window, adapter);
     super::channel_settings::bind(window, adapter);
     super::title_bar::bind(window, adapter);
+    super::wallpaper::register_callbacks(window);
     // UI bindings can request images while refresh borrows the adapter.
     // Deliver their requests in one batch after the current UI work.
     let pending = Rc::new(RefCell::new(HashSet::new()));
@@ -1769,6 +1770,16 @@ pub(super) fn bind_callbacks(window: &YapfastWindow, adapter: &Rc<RefCell<Adapte
         layout.close_to_tray = Some(window.get_close_to_tray());
         layout.multiple_windows = window.get_multiple_windows();
         layout.developer_mode = window.get_developer_mode();
+        let wp = window.global::<yapfast_ui::Wallpaper>();
+        layout.wallpaper_enabled = Some(wp.get_enabled());
+        layout.wallpaper_path = if wp.get_enabled() {
+            Some(wp.get_path().as_str().to_string())
+        } else {
+            None
+        };
+        layout.wallpaper_blur = Some(wp.get_blur());
+        layout.wallpaper_dim = Some(wp.get_dim());
+        layout.wallpapers = super::wallpaper::get_saved_wallpapers();
         adapter.layout.write(&adapter.root);
         adapter.watch_talk_key(&window);
         let start = window.get_start_on_sign_in();

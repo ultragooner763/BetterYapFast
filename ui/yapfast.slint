@@ -38,7 +38,7 @@ import "fonts/DisplayName-Journal.ttf";
 // Yapfast's window. Its parts live beside it, by area: theme.slint, controls.slint,
 // discord.slint, voice.slint, rail.slint, composer.slint, messages.slint,
 // settings.slint, people.slint, friends.slint, dialogs.slint and sign-in.slint.
-import { Theme, Tip, BadgeTip, ReactionHover, Middle, Popup, PopupMotion } from "theme.slint";
+import { Theme, Tip, BadgeTip, ReactionHover, Middle, Popup, PopupMotion, Wallpaper } from "theme.slint";
 import { TitleBar, ResizeEdges } from "title_bar.slint";
 import { InboxRow, InboxPopout } from "yapfast/inbox.slint";
 import { GifPicker, GifTile, PickerTab } from "gifs.slint";
@@ -66,7 +66,7 @@ import { BrowseRow, BrowseScreen } from "browse.slint";
 // Rust sees these, besides YapfastWindow.
 export { ClientStyle } from "yapfast/style.slint";
 export { InboxRow } from "yapfast/inbox.slint";
-export { Theme, Badges, Popup, Looks } from "theme.slint";
+export { Theme, Badges, Popup, Looks, Wallpaper, WallpaperTile } from "theme.slint";
 export { Autoscroll } from "scrollview.slint";
 export { PersonRow, CallLink, ShareScreen } from "voice.slint";
 export { ServerRow, RoomRow, FolderServer } from "rail.slint";
@@ -2321,13 +2321,26 @@ export component YapfastWindow inherits Window {
         open-discord-captcha => { root.open-discord-captcha(); }
     }
 
+    if Wallpaper.enabled && root.workspace: Rectangle {
+        y: 0px;
+        x: 0px;
+        width: root.width;
+        height: root.height;
+        Image {
+            width: parent.width;
+            height: parent.height;
+            source: Wallpaper.image;
+            image-fit: cover;
+        }
+    }
+
     HorizontalLayout {
         y: root.title-height; height: root.height - root.title-height;
         visible: root.workspace;
         spacing: 0px;
         // Navigation: the rail and the sidebar, with the voice and account dock across both.
         Rectangle {
-            width: 72px + root.sidebar-shown; background: Theme.rail;
+            width: 72px + root.sidebar-shown; background: Wallpaper.enabled ? #101114b8 : Theme.rail;
             VerticalLayout {
                 spacing: 0px;
                 HorizontalLayout {
@@ -2346,7 +2359,7 @@ export component YapfastWindow inherits Window {
                     }
                     // Channel sidebar: a lighter sheet held by the rail and the dock.
                     Rectangle {
-                        width: root.sidebar-shown; background: Theme.sidebar;
+                        width: root.sidebar-shown; background: Wallpaper.enabled ? #131418bf : Theme.sidebar;
                         border-top-left-radius: ClientStyle.enabled ? 12px : 10px; border-bottom-left-radius: ClientStyle.enabled ? 0px : 10px;
                         clip: true;
                         VerticalLayout {
@@ -2498,7 +2511,7 @@ export component YapfastWindow inherits Window {
                     account-panel := Rectangle {
                         // Anywhere on the card brightens its nameplate; each part lights only itself.
                         property <bool> hot: account-touch.has-hover || avatar-touch.has-hover || mic.hovered || ear.hovered || cog.hovered;
-                        height: ClientStyle.account-height; background: Theme.panel;
+                        height: ClientStyle.account-height; background: Wallpaper.enabled ? #111215cc : Theme.panel;
                         border-radius: ClientStyle.enabled ? 8px : 0px;
                         // The nameplate fills the card, a pixel beyond it above and below.
                         if AccountLook.nameplate-url != "": Nameplate {
@@ -2601,11 +2614,12 @@ export component YapfastWindow inherits Window {
         }
         // Conversation.
         Rectangle {
-            background: Theme.chat;
+            background: Wallpaper.enabled ? #16171cbf : Theme.chat;
             VerticalLayout {
                 spacing: 0px;
                 Rectangle {
                     height: ClientStyle.header-height;
+                    background: Wallpaper.enabled ? #14151999 : transparent;
                     HorizontalLayout {
                         padding-left: 16px; padding-right: 16px; spacing: 10px;
                         if root.room-direct: Middle {
@@ -3363,7 +3377,7 @@ export component YapfastWindow inherits Window {
                             if root.typing != "" && root.room-selected && !root.voice-panel: Rectangle {
                                 x: 72px - 4px; y: parent.height - self.height;
                                 width: min(parent.width - 72px - 12px, typing-text.preferred-width + 8px); height: 20px;
-                                background: Theme.chat;
+                                background: Wallpaper.enabled ? transparent : Theme.chat;
                                 typing-text := Text {
                                     x: 4px; width: parent.width - 8px;
                                     text: root.typing; color: Theme.text; font-size: 13px; font-weight: 500;
@@ -3375,7 +3389,7 @@ export component YapfastWindow inherits Window {
                             if root.typing != "" && root.room-selected && !root.voice-panel: Rectangle {
                                 x: 36px - self.width / 2; y: parent.height - self.height;
                                 width: 32px; height: 20px;
-                                background: Theme.chat;
+                                background: Wallpaper.enabled ? transparent : Theme.chat;
                                 for dot in 3: Rectangle {
                                     property <float> wave: sin(animation-tick() / 1ms * 0.3deg - dot * 70deg);
                                     x: 4px + dot * 9px; y: (parent.height - self.height) / 2 - 1.5px * self.wave;
@@ -3398,7 +3412,7 @@ export component YapfastWindow inherits Window {
                                 ignore-request => { root.ignore-request(); }
                             }
                             if root.compose-label != "": Rectangle {
-                                height: 36px; background: Theme.sidebar;
+                                height: 36px; background: Wallpaper.enabled ? #17181fcc : Theme.sidebar;
                                 border-top-left-radius: 10px; border-top-right-radius: 10px;
                                 HorizontalLayout {
                                     padding-left: 14px; padding-right: 4px; spacing: 8px;
@@ -3410,7 +3424,7 @@ export component YapfastWindow inherits Window {
                             }
                             if root.composer-locked && !root.room-request: Rectangle {
                                 height: ClientStyle.composer-height;
-                                background: Theme.field; border-width: 1px; border-color: Theme.outline-field; border-radius: 10px;
+                                background: Wallpaper.enabled ? #1e2027b8 : Theme.field; border-width: 1px; border-color: Theme.outline-field; border-radius: 10px;
                                 accessible-role: text; accessible-label: root.composer-locked-text;
                                 Text {
                                     x: 16px; width: parent.width - 32px; height: parent.height;
@@ -3421,7 +3435,7 @@ export component YapfastWindow inherits Window {
                             composer-box := Rectangle {
                                 visible: !root.room-request && !root.composer-locked;
                                 min-height: root.room-request || root.composer-locked ? 0px : ClientStyle.composer-height; max-height: root.room-request || root.composer-locked ? 0px : 100000px;
-                                background: ClientStyle.enabled ? Theme.composer : Theme.field;
+                                background: Wallpaper.enabled ? #1e2027c4 : (ClientStyle.enabled ? Theme.composer : Theme.field);
                                 // Discord's outline: faint, and a notch lighter with the keys.
                                 border-width: 1px;
                                 border-color: composer.focused ? Theme.muted.with-alpha(0.55) : ClientStyle.enabled ? Theme.outline-field : Theme.line;

@@ -66,15 +66,15 @@ use animation::{FlickAnimation, FlickAnimationParameter};
 /// Fixed-duration animation used for wheel scrolling, where we don't have enough phase
 /// information to derive a fling velocity.
 /// The unit is: millisecond
-const WHEEL_SCROLL_DURATION: Duration = Duration::from_millis(180);
+const WHEEL_SCROLL_DURATION: Duration = Duration::from_millis(260);
 /// Yapfast: how far the winit backend scrolls for one notch of a wheel, in logical pixels.
 const WHEEL_NOTCH: f32 = 60.;
 /// Yapfast: a wheel spun faster than this, in notches a second, scrolls farther for each notch,
 /// in proportion, so a hard spin crosses a long history quickly and a slow one keeps its
 /// precision.
-const WHEEL_ACCELERATION_START: f32 = 12.;
+const WHEEL_ACCELERATION_START: f32 = 16.;
 /// Yapfast: the most a notch scales.
-const WHEEL_MOST_ACCELERATION: f32 = 6.;
+const WHEEL_MOST_ACCELERATION: f32 = 3.5;
 /// Yapfast: how long a notch counts towards the wheel's speed: its weight falls by e in this time.
 const WHEEL_SPEED_MEMORY: Duration = Duration::from_millis(200);
 #[cfg(not(any(target_os = "ios", target_os = "linux", target_os = "none", target_os = "macos")))]

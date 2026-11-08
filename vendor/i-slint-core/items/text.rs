@@ -1,4 +1,4 @@
-// Copyright © SixtyFPS GmbH <info@slint.dev>
+﻿// Copyright © SixtyFPS GmbH <info@slint.dev>
 // SPDX-License-Identifier: GPL-3.0-only OR LicenseRef-Slint-Royalty-free-2.0 OR LicenseRef-Slint-Software-3.0
 
 // cSpell: ignore textitem
@@ -1571,16 +1571,6 @@ impl Item for TextInput {
                     return KeyEventResult::EventAccepted;
                 }
 
-                // Only insert/interpreter non-control character strings
-                if event.key_event.text.is_empty()
-                    || event.key_event.text.as_str().chars().any(|ch| {
-                        // exclude the private use area as we encode special keys into it
-                        ('\u{f700}'..='\u{f7ff}').contains(&ch) || (ch.is_control() && ch != '\n')
-                    })
-                {
-                    return KeyEventResult::EventIgnored;
-                }
-
                 if let Some(shortcut) = event.shortcut() {
                     match shortcut {
                         StandardShortcut::SelectAll => {
@@ -1614,6 +1604,16 @@ impl Item for TextInput {
                         }
                         _ => (),
                     }
+                }
+
+                // Only insert/interpreter non-control character strings
+                if event.key_event.text.is_empty()
+                    || event.key_event.text.as_str().chars().any(|ch| {
+                        // exclude the private use area as we encode special keys into it
+                        ('\u{f700}'..='\u{f7ff}').contains(&ch) || (ch.is_control() && ch != '\n')
+                    })
+                {
+                    return KeyEventResult::EventIgnored;
                 }
 
                 if self.read_only() || event.key_event.modifiers.control {

@@ -461,7 +461,7 @@ export component ChannelRow inherits Rectangle {
     height: root.person ? ClientStyle.dm-row-height : ClientStyle.channel-row-height;
     border-radius: 6px;
     background: root.selected ? Theme.active : pointer.has-hover ? Theme.hover : transparent;
-    animate background { duration: 90ms; }
+    animate background { duration: 160ms; easing: ease-out; }
     border-width: focus.has-focus ? 2px : 0px;
     border-color: Theme.accent;
     accessible-role: button;
@@ -703,7 +703,7 @@ component CategoryHeading inherits Rectangle {
             source: @image-url("icons/chevron-down.svg");
             width: 12px; image-fit: contain; colorize: root.ink;
             transform-rotation: root.collapsed ? -90deg : 0deg;
-            animate transform-rotation { duration: 120ms; easing: ease-out; }
+            animate transform-rotation { duration: 180ms; easing: ease-out; }
         }
         Rectangle { horizontal-stretch: 1; }
     }
@@ -822,7 +822,7 @@ export component ServerHeader inherits Rectangle {
             Image {
                 source: @image-url("icons/chevron-down.svg"); width: ClientStyle.enabled ? 16px : 20px; height: ClientStyle.enabled ? 16px : 20px; y: (parent.height - self.height) / 2;
                 colorize: root.on-banner ? #ffffff : ClientStyle.enabled ? Theme.secondary : Theme.muted; transform-rotation: root.open ? 180deg : 0deg;
-                animate transform-rotation { duration: 120ms; easing: ease-out; }
+                animate transform-rotation { duration: 180ms; easing: ease-out; }
             }
         }
     }
@@ -1247,7 +1247,7 @@ export component RoomList inherits Rectangle {
                         property <string> tip: person.elsewhere ? "Connected on another client" : "";
                         height: 30px; border-radius: 4px;
                         background: person-touch.has-hover ? Theme.hover : transparent;
-                        animate background { duration: 90ms; }
+                        animate background { duration: 160ms; easing: ease-out; }
                         opacity: person.elsewhere && !person-touch.has-hover ? 0.5 : 1;
                         accessible-role: button;
                         accessible-label: person.elsewhere ? person.name + ", connected on another client" : person.name;
@@ -1311,7 +1311,7 @@ export component RoomList inherits Rectangle {
                         // menu, as above.
                         height: 30px; border-radius: 4px;
                         background: participant-touch.has-hover ? Theme.hover : transparent;
-                        animate background { duration: 90ms; }
+                        animate background { duration: 160ms; easing: ease-out; }
                         accessible-role: button; accessible-label: person.name;
                         accessible-description: "Show their profile";
                         accessible-action-default => {

@@ -52,7 +52,7 @@ webbrowser = { version = "1", optional = true }
 arboard = { version = "3.6", default-features = false, features = ["image-data", "wayland-data-control"], optional = true }
 # Saves pictures pasted as pixels to PNG files to attach, after decoding the
 # bitmaps Windows pastes, and reads pictures copied from messages.
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"], optional = true }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp", "ico"], optional = true }
 tempfile = { workspace = true, optional = true }
 tracing.workspace = true
 # The code the Discord phone app scans to link an account.
@@ -180,6 +180,19 @@ debug = "line-tables-only"
 
 [profile.dev.package."*"]
 debug = false
+
+[profile.dev.package.i-slint-core]
+opt-level = 3
+[profile.dev.package.i-slint-renderer-skia]
+opt-level = 3
+[profile.dev.package.skia-safe]
+opt-level = 3
+[profile.dev.package.slint]
+opt-level = 3
+[profile.dev.package.image]
+opt-level = 3
+[profile.dev.package.yapfast-ui]
+opt-level = 2
 
 # DeepFilterNet, the Discord microphone's noise suppression, runs on tract.
 # Unoptimized it can't keep up with the microphone, and tract-core's debug
