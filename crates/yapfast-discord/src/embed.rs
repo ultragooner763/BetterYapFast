@@ -123,6 +123,25 @@ pub struct Parsed {
     pub hides: Vec<String>,
 }
 
+/// Whether an address belongs to an interactive web player/iframe provider rather
+/// than a direct video stream file that FFmpeg can decode.
+fn is_web_player(url: &str) -> bool {
+    let lower = url.to_ascii_lowercase();
+    lower.contains("medal.tv")
+        || lower.contains("youtube.com")
+        || lower.contains("youtu.be")
+        || lower.contains("twitch.tv")
+        || lower.contains("tiktok.com")
+        || lower.contains("streamable.com")
+        || lower.contains("vimeo.com")
+        || lower.contains("dailymotion.com")
+        || lower.contains("bilibili.com")
+        || lower.contains("kick.com")
+        || lower.contains("coub.com")
+        || lower.contains("facebook.com")
+        || lower.contains("instagram.com")
+}
+
 pub fn parse(embeds: &Value) -> Parsed {
     let mut parsed = Parsed {
         embeds: Vec::new(),
@@ -179,8 +198,15 @@ pub fn parse(embeds: &Value) -> Parsed {
         // A video file the media proxy has plays in Yapfast, whatever the
         // embed's kind: vxtwitter's posts come as rich cards with one. Other
         // videos, such as YouTube's, open in the browser.
-        let playable = embed["video"]["proxy_url"].as_str();
-        let video = embed["video"].is_object() && (kind == "video" || playable.is_some());
+        let raw_video_url = embed["video"]["url"].as_str().unwrap_or_default();
+        let page_url = url.as_deref().unwrap_or_default();
+        let is_web = is_web_player(raw_video_url) || is_web_player(page_url);
+        let playable = if is_web {
+            None
+        } else {
+            embed["video"]["proxy_url"].as_str()
+        };
+        let video = embed["video"].is_object() && (kind == "video" || playable.is_some() || is_web);
         // Articles and videos show their thumbnail large, as Discord does.
         let large_thumbnail = video || kind == "article";
         let image = embed["image"].is_object();

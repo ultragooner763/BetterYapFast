@@ -191,8 +191,8 @@ opt-level = 3
 opt-level = 3
 [profile.dev.package.image]
 opt-level = 3
-[profile.dev.package.yapfast-ui]
-opt-level = 2
+# yapfast-ui kept at opt-level 0 for fast compilation
+
 
 # DeepFilterNet, the Discord microphone's noise suppression, runs on tract.
 # Unoptimized it can't keep up with the microphone, and tract-core's debug

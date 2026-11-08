@@ -685,6 +685,7 @@ fn gallery_cells(previews: &[Preview<'_>], covered: &dyn Fn(usize) -> bool) -> (
     let cell = |index: usize,
                 attachment: &yapfast_core::chat::Attachment,
                 preview: Option<&Arc<Picture>>| {
+        let url: slint::SharedString = attachment.url.as_deref().unwrap_or_default().into();
         // A video whose poster didn't come plays all the same.
         let Some(preview) = preview else {
             return ImageCell {
@@ -692,6 +693,7 @@ fn gallery_cells(previews: &[Preview<'_>], covered: &dyn Fn(usize) -> bool) -> (
                 name: attachment.name.clone().into(),
                 loading: loading(attachment),
                 video: attachment.video,
+                url: url.clone(),
                 ..Default::default()
             };
         };
@@ -702,6 +704,7 @@ fn gallery_cells(previews: &[Preview<'_>], covered: &dyn Fn(usize) -> bool) -> (
                 name: attachment.name.clone().into(),
                 spoiler,
                 video: attachment.video,
+                url: url.clone(),
                 ..Default::default()
             };
         }
@@ -712,6 +715,7 @@ fn gallery_cells(previews: &[Preview<'_>], covered: &dyn Fn(usize) -> bool) -> (
             frames,
             delays,
             video: attachment.video,
+            url,
             gif: attachment
                 .gif
                 .as_ref()

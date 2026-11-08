@@ -182,6 +182,7 @@ export struct ImageCell {
     /// A GIF's page, by which it's kept among the favourites; empty for any
     /// other picture.
     gif: string,
+    url: string,
 }
 
 // The video playing. The cell showing it binds to this, so its pictures
@@ -210,6 +211,7 @@ export global VideoPlayer {
     in property <int> duration;
     /// It shows large over everything, in VideoViewer.
     in property <bool> expanded;
+    in-out property <bool> looping: false;
     /// Plays an item's attachment in a cell of this size.
     callback play(string, int, length, length);
     /// Shows it large, or back in its cell.
@@ -229,7 +231,8 @@ export global VideoPlayer {
 // upright, leaves out the time and then mute, so full screen stays in it.
 component VideoControls inherits Rectangle {
     // Play, full screen, the padding and their spacing; the bar keeps 32px.
-    property <length> fixed: 4px + 28px + 6px + 32px + 6px + 28px + 6px;
+    property <length> fixed: 4px + 28px + 6px + 32px + 6px + 28px + 6px + 34px;
+    property <bool> show-loop: root.width >= 160px;
     property <bool> show-mute: VideoPlayer.sound && root.width >= root.fixed + 34px;
     property <bool> show-time: root.width >= root.fixed + (root.show-mute ? 34px : 0px) + clock.preferred-width + 6px;
     clock := Text { visible: false; text: VideoPlayer.time; font-size: 12px; }
@@ -257,6 +260,15 @@ component VideoControls inherits Rectangle {
                 mouse-cursor: MouseCursor.pointer;
                 clicked => { VideoPlayer.seek(clamp(self.mouse-x / self.width, 0, 1)); }
                 moved => { if self.pressed { VideoPlayer.seek(clamp(self.mouse-x / self.width, 0, 1)); } }
+            }
+        }
+        if root.show-loop: Middle {
+            IconButton {
+                size: 28px; glyph: 14px; tip-side: 0;
+                icon: @image-url("icons/refresh-cw.svg");
+                tint: VideoPlayer.looping ? Theme.accent : #ffffff;
+                label: VideoPlayer.looping ? "Loop: On" : "Loop: Off";
+                clicked => { VideoPlayer.looping = !VideoPlayer.looping; }
             }
         }
         // Mute, with a slider over it for how loud, while the pointer is on
@@ -340,10 +352,18 @@ component VideoControls inherits Rectangle {
 component VideoCell inherits Rectangle {
     in property <string> item;
     in property <ImageCell> cell;
+    in property <string> fallback-url: root.cell.url;
+    callback open-link(string);
     /// A right click, at this place in the window.
     callback menu(length, length);
     property <bool> active: VideoPlayer.item == root.item && VideoPlayer.index == root.cell.index;
     property <bool> failed: root.active && VideoPlayer.error != "";
+    property <bool> video-ended: root.active && VideoPlayer.ended;
+    changed video-ended => {
+        if self.video-ended && VideoPlayer.looping {
+            VideoPlayer.toggle();
+        }
+    }
     accessible-role: button;
     accessible-label: (root.active && VideoPlayer.playing ? "Pause " : "Play ") + root.cell.name;
     accessible-action-default => { pointer.clicked(); }
@@ -356,7 +376,18 @@ component VideoCell inherits Rectangle {
     pointer := TouchArea {
         mouse-cursor: MouseCursor.pointer;
         clicked => {
-            if root.active && !root.failed { VideoPlayer.toggle(); } else { VideoPlayer.play(root.item, root.cell.index, root.width, root.height); }
+            if root.failed && root.fallback-url != "" {
+                root.open-link(root.fallback-url);
+            } else if root.active && !root.failed {
+                VideoPlayer.toggle();
+            } else {
+                VideoPlayer.play(root.item, root.cell.index, root.width, root.height);
+            }
+        }
+        double-clicked => {
+            if root.active && !root.failed {
+                VideoPlayer.expand(!VideoPlayer.expanded);
+            }
         }
         pointer-event(event) => {
             if event.button == PointerEventButton.right && event.kind == PointerEventKind.down {
@@ -383,9 +414,19 @@ component VideoCell inherits Rectangle {
         loading := Text { text: "Loading..."; color: #ffffff; font-size: 13px; }
     }
     if root.failed: Rectangle {
-        y: parent.height - self.height - 8px; width: min(parent.width - 16px, problem.preferred-width + 20px); height: 28px;
-        border-radius: 6px; background: #000000cc;
-        problem := Text { text: VideoPlayer.error; color: #ffffff; font-size: 13px; overflow: elide; }
+        y: parent.height - self.height - 8px; width: min(parent.width - 16px, err-box.preferred-width + 24px); height: 30px;
+        border-radius: 6px; background: #111215ea; border-width: 1px; border-color: #ffffff26;
+        err-box := HorizontalLayout {
+            padding-left: 8px; padding-right: 8px; spacing: 6px; alignment: center;
+            Image { source: @image-url("icons/triangle-alert.svg"); width: 14px; height: 14px; colorize: Theme.danger; vertical-alignment: center; }
+            problem := Text { text: VideoPlayer.error; color: #ffffff; font-size: 12px; overflow: elide; vertical-alignment: center; }
+            if root.fallback-url != "": Rectangle { width: 1px; height: 14px; background: #ffffff26; }
+            if root.fallback-url != "": HorizontalLayout {
+                spacing: 4px;
+                Image { source: @image-url("icons/external-link.svg"); width: 12px; height: 12px; colorize: Theme.accent; vertical-alignment: center; }
+                Text { text: "Open link"; color: Theme.accent; font-size: 12px; font-weight: 600; vertical-alignment: center; }
+            }
+        }
     }
 }
 
@@ -1427,6 +1468,8 @@ export component EmbedView inherits HorizontalLayout {
                             // A video file the media proxy has plays here; others open in the browser.
                             if cell.video && !cell.spoiler && !cell.loading: VideoCell {
                                 width: parent.width; height: parent.height; item: root.item; cell: cell;
+                                fallback-url: cell.url != "" ? cell.url : root.embed.url;
+                                open-link(url) => { root.open-link(url); }
                                 menu(x, y) => { root.media-menu(root.item, cell.index, true, x, y); }
                             }
                         }
@@ -1837,7 +1880,8 @@ export component ImageViewer inherits Rectangle {
     property <string> menu-link;
     property <length> menu-x;
     property <length> menu-y;
-    background: #000000e6;
+    property <bool> zoom-original: false;
+    background: #090a0df2;
     accessible-role: groupbox;
     accessible-label: "Image viewer";
     TouchArea { clicked => { root.close-image(); } }
@@ -1854,7 +1898,7 @@ export component ImageViewer inherits Rectangle {
         property <length> room-height: root.height - 128px;
         property <length> natural-width: max(1, root.viewer-width) * 1px;
         property <length> natural-height: max(1, root.viewer-height) * 1px;
-        property <float> scale: min(1, min(self.room-width / self.natural-width, self.room-height / self.natural-height));
+        property <float> scale: root.zoom-original ? 1.0 : min(1, min(self.room-width / self.natural-width, self.room-height / self.natural-height));
         Picture {
             width: viewer-keys.natural-width * viewer-keys.scale; height: viewer-keys.natural-height * viewer-keys.scale;
             x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
@@ -1877,6 +1921,26 @@ export component ImageViewer inherits Rectangle {
                 alignment: center; horizontal-stretch: 1;
                 Text { text: root.viewer-name; color: #ffffff; font-size: 15px; font-weight: 700; overflow: elide; }
                 if root.viewer-position != "": Text { text: root.viewer-position; color: #ffffffb3; font-size: 13px; }
+            }
+            Middle {
+                IconButton {
+                    icon: root.zoom-original ? @image-url("icons/minimize.svg") : @image-url("icons/maximize.svg");
+                    label: root.zoom-original ? "Fit to window" : "Original size (100%)";
+                    tint: root.zoom-original ? Theme.accent : #ffffff;
+                    clicked => { root.zoom-original = !root.zoom-original; }
+                }
+            }
+            if !root.preview: Middle {
+                IconButton {
+                    icon: @image-url("icons/copy.svg"); label: "Copy image"; tint: #ffffff;
+                    clicked => { root.copy-attachment(root.viewer-item, root.viewer-index); }
+                }
+            }
+            if root.attachment-link(root.viewer-item, root.viewer-index) != "": Middle {
+                IconButton {
+                    icon: @image-url("icons/external-link.svg"); label: "Open original in browser"; tint: #ffffff;
+                    clicked => { root.open-link(root.attachment-link(root.viewer-item, root.viewer-index)); }
+                }
             }
             if !root.preview: Middle {
                 IconButton {
@@ -1934,7 +1998,7 @@ export component VideoViewer inherits Rectangle {
     property <string> menu-link;
     property <length> menu-x;
     property <length> menu-y;
-    background: #000000e6;
+    background: #090a0df2;
     accessible-role: groupbox;
     accessible-label: "Video viewer";
     TouchArea { clicked => { VideoPlayer.expand(false); } }
@@ -1969,6 +2033,7 @@ export component VideoViewer inherits Rectangle {
             TouchArea {
                 mouse-cursor: MouseCursor.pointer;
                 clicked => { VideoPlayer.toggle(); }
+                double-clicked => { VideoPlayer.expand(false); }
                 pointer-event(event) => {
                     if event.button == PointerEventButton.right && event.kind == PointerEventKind.down {
                         root.menu-link = root.attachment-link(VideoPlayer.item, VideoPlayer.index);
@@ -1999,6 +2064,18 @@ export component VideoViewer inherits Rectangle {
             VerticalLayout {
                 alignment: center; horizontal-stretch: 1;
                 Text { text: VideoPlayer.name; color: #ffffff; font-size: 15px; font-weight: 700; overflow: elide; }
+            }
+            if root.attachment-link(VideoPlayer.item, VideoPlayer.index) != "": Middle {
+                IconButton {
+                    icon: @image-url("icons/external-link.svg"); label: "Open in browser"; tint: #ffffff;
+                    clicked => { root.open-link(root.attachment-link(VideoPlayer.item, VideoPlayer.index)); }
+                }
+            }
+            if root.attachment-link(VideoPlayer.item, VideoPlayer.index) != "": Middle {
+                IconButton {
+                    icon: @image-url("icons/copy.svg"); label: "Copy link"; tint: #ffffff;
+                    clicked => { root.copy-text(root.attachment-link(VideoPlayer.item, VideoPlayer.index)); }
+                }
             }
             if !root.preview: Middle {
                 IconButton {
