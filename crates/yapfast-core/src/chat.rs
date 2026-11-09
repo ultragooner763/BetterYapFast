@@ -1636,6 +1636,8 @@ pub enum VideoCommand {
     /// Play it this loud, from 0 to 1 as the slider stands, unmuted; 0
     /// mutes it, keeping the level it had.
     Volume(f32),
+    /// Play at this speed (e.g. 2.0 = 2x).
+    Speed(f32),
     Stop,
 }
 

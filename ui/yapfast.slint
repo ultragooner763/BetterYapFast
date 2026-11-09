@@ -4266,8 +4266,10 @@ export component YapfastWindow inherits Window {
         }
     }
     // An image shown large over everything; see ImageViewer.
-    if root.viewer-open: ImageViewer {
+    image-viewer-motion := PopupMotion { open: root.viewer-open; }
+    if image-viewer-motion.shown: ImageViewer {
         y: root.title-height; height: root.height - root.title-height;
+        motion: image-viewer-motion.amount;
         viewer-image: root.viewer-image; viewer-frames: root.viewer-frames; viewer-delays: root.viewer-delays;
         viewer-width: root.viewer-width; viewer-height: root.viewer-height; viewer-name: root.viewer-name;
         viewer-position: root.viewer-position; viewer-note: root.viewer-note;
@@ -4281,8 +4283,10 @@ export component YapfastWindow inherits Window {
         attachment-link(item, index) => { return root.attachment-link(item, index); }
     }
     // The video playing, shown large over everything; see VideoViewer.
-    if VideoPlayer.expanded && VideoPlayer.item != "": VideoViewer {
+    video-viewer-motion := PopupMotion { open: VideoPlayer.expanded && VideoPlayer.item != ""; }
+    if video-viewer-motion.shown: VideoViewer {
         y: root.title-height; height: root.height - root.title-height;
+        motion: video-viewer-motion.amount;
         preview: root.preview;
         save-attachment(item, index) => { root.save-attachment(item, index); }
         copy-text(text) => { root.copy-text(text); }

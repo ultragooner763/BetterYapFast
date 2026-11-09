@@ -118,6 +118,7 @@ impl Source for Download {
 struct Clock {
     at_ms: u64,
     since: Option<Instant>,
+    speed: f64,
 }
 
 impl Clock {
@@ -125,7 +126,7 @@ impl Clock {
         self.at_ms
             + self
                 .since
-                .map_or(0, |since| since.elapsed().as_millis() as u64)
+                .map_or(0, |since| (since.elapsed().as_millis() as f64 * self.speed) as u64)
     }
 
     fn run(&mut self, running: bool) {
@@ -139,6 +140,17 @@ impl Clock {
         self.at_ms = at_ms;
         if self.since.is_some() {
             self.since = Some(Instant::now());
+        }
+    }
+
+    fn set_speed(&mut self, speed: f32) {
+        let speed = (speed as f64).clamp(0.25, 4.0);
+        if (self.speed - speed).abs() > 0.01 {
+            self.at_ms = self.now();
+            if self.since.is_some() {
+                self.since = Some(Instant::now());
+            }
+            self.speed = speed;
         }
     }
 }
@@ -224,6 +236,7 @@ impl Shared {
                 clock: Clock {
                     at_ms: 0,
                     since: None,
+                    speed: 1.0,
                 },
                 volume,
                 stop: false,
@@ -435,6 +448,9 @@ fn take(shared: &Shared, progress: &Progress, control: Control) {
                     move_to(shared, &mut state, shown);
                 }
             }
+        }
+        Control::Speed(speed) => {
+            state.clock.set_speed(speed);
         }
         Control::Downloaded { size } => match size {
             Some(size) => progress.downloaded(size),
@@ -822,6 +838,7 @@ mod tests {
         let mut clock = Clock {
             at_ms: 0,
             since: None,
+            speed: 1.0,
         };
         assert_eq!(clock.now(), 0);
         clock.run(true);

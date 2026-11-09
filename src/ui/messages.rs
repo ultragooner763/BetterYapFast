@@ -1040,7 +1040,20 @@ fn blocks_of(
         let before = index.checked_sub(1).map(|index| &blocks[index]);
         let typed = block.text(markdown);
         let text = match block.kind {
-            Kind::Code => slint::StyledText::from_plain_text(&typed),
+            Kind::Code => {
+                if typed.contains("\x1b[")
+                    || typed.contains(";3")
+                    || typed.contains("[3")
+                    || typed.contains("[0m")
+                    || typed.contains("[1;")
+                {
+                    let formatted = super::ansi::format_ansi(&typed);
+                    slint::StyledText::from_markdown(&formatted)
+                        .unwrap_or_else(|_| slint::StyledText::from_plain_text(&typed))
+                } else {
+                    slint::StyledText::from_plain_text(&typed)
+                }
+            }
             Kind::Heading(_) => styled_or(&format!("**{}**", prepare(block, &typed)), &typed),
             Kind::Subtext => styled_or(&prepare(block, &typed), &typed),
             // Discord's client shows every line, blank or not.

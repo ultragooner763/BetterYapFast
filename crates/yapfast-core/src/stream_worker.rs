@@ -296,6 +296,8 @@ pub enum Control {
     Downloaded {
         size: Option<u64>,
     },
+    /// Play the video at this speed (e.g. 1.0, 2.0).
+    Speed(f32),
 }
 
 fn as_it_comes() -> f32 {

@@ -224,6 +224,8 @@ export global VideoPlayer {
     callback mute(bool);
     /// Sets how loud it plays, unmuting it; 0 mutes it.
     callback change-volume(float);
+    /// Changes playback speed (e.g. 1.0, 2.0).
+    callback speed(float);
 }
 
 // A playing video's controls: play or pause, its time, a bar to move
@@ -1855,6 +1857,7 @@ component ViewerMenu inherits PopupWindow {
 }
 
 export component ImageViewer inherits Rectangle {
+    in property <float> motion: 1.0;
     in property <image> viewer-image;
     in property <[image]> viewer-frames;
     in property <[int]> viewer-delays;
@@ -1894,7 +1897,8 @@ export component ImageViewer inherits Rectangle {
         root.pan-y = 0px;
         root.zoom-original = false;
     }
-    background: #090a0df2;
+    background: #090a0df2.with-alpha(0.95 * root.motion);
+    opacity: root.motion;
     accessible-role: groupbox;
     accessible-label: "Image viewer";
     viewer-keys := FocusScope {
@@ -1911,7 +1915,12 @@ export component ImageViewer inherits Rectangle {
         property <length> natural-width: max(1, root.viewer-width) * 1px;
         property <length> natural-height: max(1, root.viewer-height) * 1px;
         property <float> fit-scale: min(1, min(self.room-width / self.natural-width, self.room-height / self.natural-height));
-        property <float> scale: self.fit-scale * root.zoom-factor;
+        property <float> enter-scale: 0.96 + 0.04 * root.motion;
+        property <float> scale: self.fit-scale * root.zoom-factor * self.enter-scale;
+        property <length> pic-w: self.natural-width * self.scale;
+        property <length> pic-h: self.natural-height * self.scale;
+        property <length> pic-x: (parent.width - self.pic-w) / 2 + root.pan-x;
+        property <length> pic-y: (parent.height - self.pic-h) / 2 + root.pan-y;
 
         view-touch := TouchArea {
             width: parent.width; height: parent.height;
@@ -1955,13 +1964,19 @@ export component ImageViewer inherits Rectangle {
             }
             clicked => {
                 if self.drag-dist < 6px {
-                    if root.zoom-factor <= 1.05 {
+                    let inside = self.mouse-x >= viewer-keys.pic-x && self.mouse-x <= viewer-keys.pic-x + viewer-keys.pic-w
+                              && self.mouse-y >= viewer-keys.pic-y && self.mouse-y <= viewer-keys.pic-y + viewer-keys.pic-h;
+                    if !inside {
                         root.close-image();
                     }
                 }
             }
             double-clicked => {
-                if root.zoom-factor > 1.05 {
+                let inside = self.mouse-x >= viewer-keys.pic-x && self.mouse-x <= viewer-keys.pic-x + viewer-keys.pic-w
+                          && self.mouse-y >= viewer-keys.pic-y && self.mouse-y <= viewer-keys.pic-y + viewer-keys.pic-h;
+                if !inside {
+                    root.close-image();
+                } else if root.zoom-factor > 1.05 {
                     root.zoom-factor = 1.0;
                     root.pan-x = 0px;
                     root.pan-y = 0px;
@@ -2003,8 +2018,8 @@ export component ImageViewer inherits Rectangle {
         }
 
         Picture {
-            width: viewer-keys.natural-width * viewer-keys.scale; height: viewer-keys.natural-height * viewer-keys.scale;
-            x: (parent.width - self.width) / 2 + root.pan-x; y: (parent.height - self.height) / 2 + root.pan-y;
+            width: viewer-keys.pic-w; height: viewer-keys.pic-h;
+            x: viewer-keys.pic-x; y: viewer-keys.pic-y;
             still: root.viewer-image; frames: root.viewer-frames; delays: root.viewer-delays; image-fit: contain;
             accessible-role: image; accessible-label: root.viewer-name;
         }
@@ -2094,6 +2109,7 @@ export component ImageViewer inherits Rectangle {
 // button or a click outside the video brings it back to its cell; a click
 // on it or Space plays or pauses it, and the arrow keys move five seconds.
 export component VideoViewer inherits Rectangle {
+    in property <float> motion: 1.0;
     in property <bool> preview;
     callback save-attachment(string, int);
     callback copy-text(string);
@@ -2108,19 +2124,46 @@ export component VideoViewer inherits Rectangle {
     property <length> pan-x: 0px;
     property <length> pan-y: 0px;
     property <bool> is-dragging: false;
+    property <bool> speed-2x: false;
+    property <float> space-press-time: 0;
     animate zoom-factor { duration: 120ms; easing: ease-out; }
     animate pan-x { duration: root.is-dragging ? 0ms : 120ms; easing: ease-out; }
     animate pan-y { duration: root.is-dragging ? 0ms : 120ms; easing: ease-out; }
-    background: #090a0df2;
+    background: #090a0df2.with-alpha(0.95 * root.motion);
+    opacity: root.motion;
     accessible-role: groupbox;
     accessible-label: "Video viewer";
     keys := FocusScope {
         init => { self.focus(); }
         key-pressed(event) => {
             if event.text == Key.Escape { VideoPlayer.expand(false); return accept; }
-            if event.text == " " { VideoPlayer.toggle(); return accept; }
+            if event.text == " " {
+                if !root.speed-2x {
+                    root.speed-2x = true;
+                    root.space-press-time = animation-tick() / 1ms;
+                    VideoPlayer.speed(2.0);
+                    if !VideoPlayer.playing {
+                        VideoPlayer.toggle();
+                    }
+                }
+                return accept;
+            }
             if VideoPlayer.duration > 0 && (event.text == Key.LeftArrow || event.text == Key.RightArrow) {
                 VideoPlayer.seek(clamp(VideoPlayer.progress + (event.text == Key.LeftArrow ? -5000 : 5000) / VideoPlayer.duration, 0, 1));
+                return accept;
+            }
+            return reject;
+        }
+        key-released(event) => {
+            if event.text == " " {
+                if root.speed-2x {
+                    root.speed-2x = false;
+                    let duration = (animation-tick() / 1ms) - root.space-press-time;
+                    VideoPlayer.speed(1.0);
+                    if duration < 250 {
+                        VideoPlayer.toggle();
+                    }
+                }
                 return accept;
             }
             return reject;
@@ -2131,7 +2174,12 @@ export component VideoViewer inherits Rectangle {
         property <length> natural-width: VideoPlayer.video-width > 0 && VideoPlayer.video-height > 0 ? VideoPlayer.video-width * 1px : 1600px;
         property <length> natural-height: VideoPlayer.video-width > 0 && VideoPlayer.video-height > 0 ? VideoPlayer.video-height * 1px : 900px;
         property <float> fit-scale: min(self.room-width / self.natural-width, self.room-height / self.natural-height);
-        property <float> scale: self.fit-scale * root.zoom-factor;
+        property <float> enter-scale: 0.96 + 0.04 * root.motion;
+        property <float> scale: self.fit-scale * root.zoom-factor * self.enter-scale;
+        property <length> screen-w: self.natural-width * self.scale;
+        property <length> screen-h: self.natural-height * self.scale;
+        property <length> screen-x: (parent.width - self.screen-w) / 2 + root.pan-x;
+        property <length> screen-y: 64px + (self.room-height - self.screen-h) / 2 + root.pan-y;
 
         view-touch := TouchArea {
             width: parent.width; height: parent.height;
@@ -2175,17 +2223,27 @@ export component VideoViewer inherits Rectangle {
             }
             clicked => {
                 if self.drag-dist < 6px {
-                    if root.zoom-factor <= 1.05 {
+                    let inside = self.mouse-x >= keys.screen-x && self.mouse-x <= keys.screen-x + keys.screen-w
+                              && self.mouse-y >= keys.screen-y && self.mouse-y <= keys.screen-y + keys.screen-h;
+                    if inside {
                         VideoPlayer.toggle();
+                    } else if self.mouse-y < parent.height - 70px {
+                        VideoPlayer.expand(false);
                     }
                 }
             }
             double-clicked => {
-                if root.zoom-factor > 1.05 {
-                    root.zoom-factor = 1.0;
-                    root.pan-x = 0px;
-                    root.pan-y = 0px;
-                    root.zoom-original = false;
+                let inside = self.mouse-x >= keys.screen-x && self.mouse-x <= keys.screen-x + keys.screen-w
+                          && self.mouse-y >= keys.screen-y && self.mouse-y <= keys.screen-y + keys.screen-h;
+                if inside {
+                    if root.zoom-factor > 1.05 {
+                        root.zoom-factor = 1.0;
+                        root.pan-x = 0px;
+                        root.pan-y = 0px;
+                        root.zoom-original = false;
+                    } else {
+                        VideoPlayer.expand(false);
+                    }
                 } else {
                     VideoPlayer.expand(false);
                 }
@@ -2214,8 +2272,8 @@ export component VideoViewer inherits Rectangle {
         }
 
         screen := Rectangle {
-            width: keys.natural-width * keys.scale; height: keys.natural-height * keys.scale;
-            x: (parent.width - self.width) / 2 + root.pan-x; y: 64px + (keys.room-height - self.height) / 2 + root.pan-y;
+            width: keys.screen-w; height: keys.screen-h;
+            x: keys.screen-x; y: keys.screen-y;
             background: #000000;
             property <length> base-w: keys.natural-width * keys.fit-scale;
             property <length> base-h: keys.natural-height * keys.fit-scale;
@@ -2241,6 +2299,17 @@ export component VideoViewer inherits Rectangle {
             x: (parent.width - self.width) / 2; y: parent.height - self.height - 24px;
             TouchArea { }
             VideoControls { }
+        }
+        if root.speed-2x: Rectangle {
+            x: (parent.width - self.width) / 2; y: 76px;
+            width: 114px; height: 32px; border-radius: 16px;
+            background: #000000cc; border-width: 1px; border-color: Theme.accent.with-alpha(0.6);
+            drop-shadow-blur: 16px; drop-shadow-color: #00000080;
+            HorizontalLayout {
+                alignment: center; spacing: 6px;
+                Image { source: @image-url("icons/chevrons-right.svg"); width: 14px; height: 14px; colorize: Theme.accent; vertical-alignment: center; }
+                Text { text: "2X Speed"; color: #ffffff; font-size: 13px; font-weight: 700; vertical-alignment: center; }
+            }
         }
         HorizontalLayout {
             y: 0px; height: 64px; padding-left: 20px; padding-right: 12px; spacing: 8px;

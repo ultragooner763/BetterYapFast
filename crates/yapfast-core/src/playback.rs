@@ -175,6 +175,7 @@ impl Playback {
                 turn(&mut self.video, volume);
                 Control::Volume(gain(&self.video))
             }
+            VideoCommand::Speed(speed) => Control::Speed(speed),
             // Dropping the playback stops it.
             VideoCommand::Stop => return,
         };

@@ -37,6 +37,7 @@ use crate::drop::Drag;
 use crate::{autostart, custom_emoji, emoji, emoji_text, graphics, zoom};
 
 mod appearance;
+mod ansi;
 mod away;
 mod browser;
 mod call_link;
