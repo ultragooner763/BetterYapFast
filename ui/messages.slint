@@ -1881,10 +1881,22 @@ export component ImageViewer inherits Rectangle {
     property <length> menu-x;
     property <length> menu-y;
     property <bool> zoom-original: false;
+    property <float> zoom-factor: 1.0;
+    property <length> pan-x: 0px;
+    property <length> pan-y: 0px;
+    property <bool> is-dragging: false;
+    animate zoom-factor { duration: 120ms; easing: ease-out; }
+    animate pan-x { duration: root.is-dragging ? 0ms : 120ms; easing: ease-out; }
+    animate pan-y { duration: root.is-dragging ? 0ms : 120ms; easing: ease-out; }
+    changed viewer-index => {
+        root.zoom-factor = 1.0;
+        root.pan-x = 0px;
+        root.pan-y = 0px;
+        root.zoom-original = false;
+    }
     background: #090a0df2;
     accessible-role: groupbox;
     accessible-label: "Image viewer";
-    TouchArea { clicked => { root.close-image(); } }
     viewer-keys := FocusScope {
         init => { self.focus(); }
         key-pressed(event) => {
@@ -1898,22 +1910,103 @@ export component ImageViewer inherits Rectangle {
         property <length> room-height: root.height - 128px;
         property <length> natural-width: max(1, root.viewer-width) * 1px;
         property <length> natural-height: max(1, root.viewer-height) * 1px;
-        property <float> scale: root.zoom-original ? 1.0 : min(1, min(self.room-width / self.natural-width, self.room-height / self.natural-height));
-        Picture {
-            width: viewer-keys.natural-width * viewer-keys.scale; height: viewer-keys.natural-height * viewer-keys.scale;
-            x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
-            still: root.viewer-image; frames: root.viewer-frames; delays: root.viewer-delays; image-fit: contain;
-            accessible-role: image; accessible-label: root.viewer-name;
-            TouchArea {
-                pointer-event(event) => {
-                    if event.button == PointerEventButton.right && event.kind == PointerEventKind.down {
-                        root.menu-link = root.attachment-link(root.viewer-item, root.viewer-index);
-                        root.menu-x = self.absolute-position.x + self.mouse-x - root.absolute-position.x;
-                        root.menu-y = self.absolute-position.y + self.mouse-y - root.absolute-position.y;
-                        if !root.preview || root.menu-link != "" { image-menu.show(); }
+        property <float> fit-scale: min(1, min(self.room-width / self.natural-width, self.room-height / self.natural-height));
+        property <float> scale: self.fit-scale * root.zoom-factor;
+
+        view-touch := TouchArea {
+            width: parent.width; height: parent.height;
+            mouse-cursor: self.pressed && root.zoom-factor > 1.05 ? MouseCursor.grabbing : root.zoom-factor > 1.05 ? MouseCursor.grab : MouseCursor.default;
+            property <length> drag-start-x: 0px;
+            property <length> drag-start-y: 0px;
+            property <length> pan-origin-x: 0px;
+            property <length> pan-origin-y: 0px;
+            property <length> drag-dist: 0px;
+
+            pointer-event(event) => {
+                if event.button == PointerEventButton.left {
+                    if event.kind == PointerEventKind.down {
+                        self.drag-start-x = self.mouse-x;
+                        self.drag-start-y = self.mouse-y;
+                        self.pan-origin-x = root.pan-x;
+                        self.pan-origin-y = root.pan-y;
+                        self.drag-dist = 0px;
+                        root.is-dragging = true;
+                    } else if event.kind == PointerEventKind.up {
+                        root.is-dragging = false;
+                    }
+                }
+                if event.button == PointerEventButton.right && event.kind == PointerEventKind.down {
+                    root.menu-link = root.attachment-link(root.viewer-item, root.viewer-index);
+                    root.menu-x = self.absolute-position.x + self.mouse-x - root.absolute-position.x;
+                    root.menu-y = self.absolute-position.y + self.mouse-y - root.absolute-position.y;
+                    if !root.preview || root.menu-link != "" { image-menu.show(); }
+                }
+            }
+            moved => {
+                if self.pressed {
+                    let dx = self.mouse-x - self.drag-start-x;
+                    let dy = self.mouse-y - self.drag-start-y;
+                    self.drag-dist = max(self.drag-dist, max(abs(dx), abs(dy)));
+                    if root.zoom-factor > 1.02 {
+                        root.pan-x = self.pan-origin-x + dx;
+                        root.pan-y = self.pan-origin-y + dy;
                     }
                 }
             }
+            clicked => {
+                if self.drag-dist < 6px {
+                    if root.zoom-factor <= 1.05 {
+                        root.close-image();
+                    }
+                }
+            }
+            double-clicked => {
+                if root.zoom-factor > 1.05 {
+                    root.zoom-factor = 1.0;
+                    root.pan-x = 0px;
+                    root.pan-y = 0px;
+                    root.zoom-original = false;
+                } else {
+                    let old-zoom = root.zoom-factor;
+                    let target-scale = 1.0 / max(0.01, viewer-keys.fit-scale);
+                    let new-zoom = max(2.0, target-scale);
+                    let k = new-zoom / old-zoom;
+                    let dx = self.mouse-x - parent.width / 2;
+                    let dy = self.mouse-y - parent.height / 2;
+                    root.zoom-factor = new-zoom;
+                    root.pan-x = root.pan-x * k - dx * (k - 1);
+                    root.pan-y = root.pan-y * k - dy * (k - 1);
+                    root.zoom-original = true;
+                }
+            }
+            scroll-event(event) => {
+                if event.delta-y == 0 { return reject; }
+                let step = event.delta-y > 0 ? 1.25 : 0.8;
+                let old-zoom = root.zoom-factor;
+                let new-zoom = clamp(old-zoom * step, 1.0, 10.0);
+                if new-zoom <= 1.02 {
+                    root.zoom-factor = 1.0;
+                    root.pan-x = 0px;
+                    root.pan-y = 0px;
+                    root.zoom-original = false;
+                } else {
+                    let k = new-zoom / old-zoom;
+                    let dx = self.mouse-x - parent.width / 2;
+                    let dy = self.mouse-y - parent.height / 2;
+                    root.zoom-factor = new-zoom;
+                    root.pan-x = root.pan-x * k - dx * (k - 1);
+                    root.pan-y = root.pan-y * k - dy * (k - 1);
+                    root.zoom-original = (abs(new-zoom * viewer-keys.fit-scale - 1.0) < 0.08);
+                }
+                return accept;
+            }
+        }
+
+        Picture {
+            width: viewer-keys.natural-width * viewer-keys.scale; height: viewer-keys.natural-height * viewer-keys.scale;
+            x: (parent.width - self.width) / 2 + root.pan-x; y: (parent.height - self.height) / 2 + root.pan-y;
+            still: root.viewer-image; frames: root.viewer-frames; delays: root.viewer-delays; image-fit: contain;
+            accessible-role: image; accessible-label: root.viewer-name;
         }
         HorizontalLayout {
             y: 0px; height: 64px; padding-left: 20px; padding-right: 12px; spacing: 8px;
@@ -1927,7 +2020,19 @@ export component ImageViewer inherits Rectangle {
                     icon: root.zoom-original ? @image-url("icons/minimize.svg") : @image-url("icons/maximize.svg");
                     label: root.zoom-original ? "Fit to window" : "Original size (100%)";
                     tint: root.zoom-original ? Theme.accent : #ffffff;
-                    clicked => { root.zoom-original = !root.zoom-original; }
+                    clicked => {
+                        if root.zoom-factor > 1.05 {
+                            root.zoom-factor = 1.0;
+                            root.pan-x = 0px;
+                            root.pan-y = 0px;
+                            root.zoom-original = false;
+                        } else {
+                            root.zoom-factor = max(1.5, 1.0 / max(0.01, viewer-keys.fit-scale));
+                            root.pan-x = 0px;
+                            root.pan-y = 0px;
+                            root.zoom-original = true;
+                        }
+                    }
                 }
             }
             if !root.preview: Middle {
@@ -1998,10 +2103,17 @@ export component VideoViewer inherits Rectangle {
     property <string> menu-link;
     property <length> menu-x;
     property <length> menu-y;
+    property <bool> zoom-original: false;
+    property <float> zoom-factor: 1.0;
+    property <length> pan-x: 0px;
+    property <length> pan-y: 0px;
+    property <bool> is-dragging: false;
+    animate zoom-factor { duration: 120ms; easing: ease-out; }
+    animate pan-x { duration: root.is-dragging ? 0ms : 120ms; easing: ease-out; }
+    animate pan-y { duration: root.is-dragging ? 0ms : 120ms; easing: ease-out; }
     background: #090a0df2;
     accessible-role: groupbox;
     accessible-label: "Video viewer";
-    TouchArea { clicked => { VideoPlayer.expand(false); } }
     keys := FocusScope {
         init => { self.focus(); }
         key-pressed(event) => {
@@ -2018,31 +2130,102 @@ export component VideoViewer inherits Rectangle {
         property <length> room-height: root.height - 128px;
         property <length> natural-width: VideoPlayer.video-width > 0 && VideoPlayer.video-height > 0 ? VideoPlayer.video-width * 1px : 1600px;
         property <length> natural-height: VideoPlayer.video-width > 0 && VideoPlayer.video-height > 0 ? VideoPlayer.video-height * 1px : 900px;
-        property <float> scale: min(self.room-width / self.natural-width, self.room-height / self.natural-height);
+        property <float> fit-scale: min(self.room-width / self.natural-width, self.room-height / self.natural-height);
+        property <float> scale: self.fit-scale * root.zoom-factor;
+
+        view-touch := TouchArea {
+            width: parent.width; height: parent.height;
+            mouse-cursor: self.pressed && root.zoom-factor > 1.05 ? MouseCursor.grabbing : root.zoom-factor > 1.05 ? MouseCursor.grab : MouseCursor.pointer;
+            property <length> drag-start-x: 0px;
+            property <length> drag-start-y: 0px;
+            property <length> pan-origin-x: 0px;
+            property <length> pan-origin-y: 0px;
+            property <length> drag-dist: 0px;
+
+            pointer-event(event) => {
+                if event.button == PointerEventButton.left {
+                    if event.kind == PointerEventKind.down {
+                        self.drag-start-x = self.mouse-x;
+                        self.drag-start-y = self.mouse-y;
+                        self.pan-origin-x = root.pan-x;
+                        self.pan-origin-y = root.pan-y;
+                        self.drag-dist = 0px;
+                        root.is-dragging = true;
+                    } else if event.kind == PointerEventKind.up {
+                        root.is-dragging = false;
+                    }
+                }
+                if event.button == PointerEventButton.right && event.kind == PointerEventKind.down {
+                    root.menu-link = root.attachment-link(VideoPlayer.item, VideoPlayer.index);
+                    root.menu-x = self.absolute-position.x + self.mouse-x - root.absolute-position.x;
+                    root.menu-y = self.absolute-position.y + self.mouse-y - root.absolute-position.y;
+                    if !root.preview || root.menu-link != "" { video-menu.show(); }
+                }
+            }
+            moved => {
+                if self.pressed {
+                    let dx = self.mouse-x - self.drag-start-x;
+                    let dy = self.mouse-y - self.drag-start-y;
+                    self.drag-dist = max(self.drag-dist, max(abs(dx), abs(dy)));
+                    if root.zoom-factor > 1.02 {
+                        root.pan-x = self.pan-origin-x + dx;
+                        root.pan-y = self.pan-origin-y + dy;
+                    }
+                }
+            }
+            clicked => {
+                if self.drag-dist < 6px {
+                    if root.zoom-factor <= 1.05 {
+                        VideoPlayer.toggle();
+                    }
+                }
+            }
+            double-clicked => {
+                if root.zoom-factor > 1.05 {
+                    root.zoom-factor = 1.0;
+                    root.pan-x = 0px;
+                    root.pan-y = 0px;
+                    root.zoom-original = false;
+                } else {
+                    VideoPlayer.expand(false);
+                }
+            }
+            scroll-event(event) => {
+                if event.delta-y == 0 { return reject; }
+                let step = event.delta-y > 0 ? 1.25 : 0.8;
+                let old-zoom = root.zoom-factor;
+                let new-zoom = clamp(old-zoom * step, 1.0, 10.0);
+                if new-zoom <= 1.02 {
+                    root.zoom-factor = 1.0;
+                    root.pan-x = 0px;
+                    root.pan-y = 0px;
+                    root.zoom-original = false;
+                } else {
+                    let k = new-zoom / old-zoom;
+                    let dx = self.mouse-x - parent.width / 2;
+                    let dy = self.mouse-y - parent.height / 2;
+                    root.zoom-factor = new-zoom;
+                    root.pan-x = root.pan-x * k - dx * (k - 1);
+                    root.pan-y = root.pan-y * k - dy * (k - 1);
+                    root.zoom-original = (abs(new-zoom * keys.fit-scale - 1.0) < 0.08);
+                }
+                return accept;
+            }
+        }
+
         screen := Rectangle {
             width: keys.natural-width * keys.scale; height: keys.natural-height * keys.scale;
-            x: (parent.width - self.width) / 2; y: 64px + (keys.room-height - self.height) / 2;
+            x: (parent.width - self.width) / 2 + root.pan-x; y: 64px + (keys.room-height - self.height) / 2 + root.pan-y;
             background: #000000;
-            init => { VideoPlayer.resize(self.width, self.height); }
-            changed width => { VideoPlayer.resize(self.width, self.height); }
-            changed height => { VideoPlayer.resize(self.width, self.height); }
+            property <length> base-w: keys.natural-width * keys.fit-scale;
+            property <length> base-h: keys.natural-height * keys.fit-scale;
+            init => { VideoPlayer.resize(self.base-w, self.base-h); }
+            changed base-w => { VideoPlayer.resize(self.base-w, self.base-h); }
+            changed base-h => { VideoPlayer.resize(self.base-w, self.base-h); }
             accessible-role: button;
             accessible-label: (VideoPlayer.playing ? "Pause " : "Play ") + VideoPlayer.name;
             accessible-action-default => { VideoPlayer.toggle(); }
             if VideoPlayer.has-frame: Image { width: parent.width; height: parent.height; source: VideoPlayer.frame; image-fit: contain; }
-            TouchArea {
-                mouse-cursor: MouseCursor.pointer;
-                clicked => { VideoPlayer.toggle(); }
-                double-clicked => { VideoPlayer.expand(false); }
-                pointer-event(event) => {
-                    if event.button == PointerEventButton.right && event.kind == PointerEventKind.down {
-                        root.menu-link = root.attachment-link(VideoPlayer.item, VideoPlayer.index);
-                        root.menu-x = self.absolute-position.x + self.mouse-x - root.absolute-position.x;
-                        root.menu-y = self.absolute-position.y + self.mouse-y - root.absolute-position.y;
-                        if !root.preview || root.menu-link != "" { video-menu.show(); }
-                    }
-                }
-            }
             if VideoPlayer.loading && VideoPlayer.error == "": Rectangle {
                 width: loading.preferred-width + 20px; height: 28px; border-radius: 14px; background: #000000b3;
                 loading := Text { text: "Loading..."; color: #ffffff; font-size: 13px; }
@@ -2054,8 +2237,8 @@ export component VideoViewer inherits Rectangle {
             }
         }
         Rectangle {
-            width: max(screen.width, 360px); height: 40px;
-            x: (parent.width - self.width) / 2; y: screen.y + screen.height + 8px;
+            width: max(min(keys.natural-width * keys.fit-scale, parent.width - 80px), 360px); height: 40px;
+            x: (parent.width - self.width) / 2; y: parent.height - self.height - 24px;
             TouchArea { }
             VideoControls { }
         }
@@ -2064,6 +2247,26 @@ export component VideoViewer inherits Rectangle {
             VerticalLayout {
                 alignment: center; horizontal-stretch: 1;
                 Text { text: VideoPlayer.name; color: #ffffff; font-size: 15px; font-weight: 700; overflow: elide; }
+            }
+            Middle {
+                IconButton {
+                    icon: root.zoom-original ? @image-url("icons/minimize.svg") : @image-url("icons/maximize.svg");
+                    label: root.zoom-original ? "Fit to window" : "Original size (100%)";
+                    tint: root.zoom-original ? Theme.accent : #ffffff;
+                    clicked => {
+                        if root.zoom-factor > 1.05 {
+                            root.zoom-factor = 1.0;
+                            root.pan-x = 0px;
+                            root.pan-y = 0px;
+                            root.zoom-original = false;
+                        } else {
+                            root.zoom-factor = max(1.5, 1.0 / max(0.01, keys.fit-scale));
+                            root.pan-x = 0px;
+                            root.pan-y = 0px;
+                            root.zoom-original = true;
+                        }
+                    }
+                }
             }
             if root.attachment-link(VideoPlayer.item, VideoPlayer.index) != "": Middle {
                 IconButton {
@@ -2097,9 +2300,6 @@ export component VideoViewer inherits Rectangle {
     }
 }
 
-// A message's avatar or time, its reply, author line, text, attachments,
-// thread and reactions: a timeline row without what scrolls and hovers it,
-// for the conversation's timeline and a thread's beside it.
 export component MessageContent inherits VerticalLayout {
     in property <MessageRow> message;
     /// The message the pointer or keyboard is on, whose time shows.
