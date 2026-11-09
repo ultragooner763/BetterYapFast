@@ -1574,6 +1574,7 @@ export component YapfastWindow inherits Window {
     /// Show less was clicked on one, by its item, saying whether it shows
     /// whole now.
     in-out property <bool> collapse-long;
+    in-out property <bool> apple-emoji: true;
     callback fold-message(string, bool);
     /// Brings the message at `index` into view: an estimate first, so the list builds its
     /// row, then the row places itself on each `settle-jump` as the rows around it measure.
@@ -3939,6 +3940,7 @@ export component YapfastWindow inherits Window {
             animate <=> root.animate;
             reply-ping <=> root.reply-ping-default; strip-tracking <=> root.strip-tracking;
             collapse-long <=> root.collapse-long;
+            apple-emoji <=> root.apple-emoji;
             matrix: root.matrix-build; discord: root.discord-linked;
             preferences-changed => { root.preferences-changed(); }
         }

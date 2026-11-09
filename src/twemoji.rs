@@ -8,16 +8,36 @@
 //! gets a decoded image back, which it keeps while it shows it: the pictures are
 //! 72px square, and drawn from there at whatever the display needs.
 
-use std::{cell::RefCell, collections::HashMap};
+use std::{cell::RefCell, collections::HashMap, sync::atomic::{AtomicBool, Ordering}};
 
-/// The font, each picture in it a glyph. A static, as a const would be a copy in
-/// the program for each place that names it.
+/// The Twemoji font, each picture in it a glyph.
 pub static FONT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/twemoji.ttf"));
-
-/// What finds a picture in [`FONT`]: a count, then for each picture where its name
-/// starts and how long it is, and where it starts in the font and how long it is,
-/// then the names. The names sort.
 static INDEX: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/twemoji.index"));
+
+/// The Apple Emoji font, each picture in it a glyph.
+pub static APPLE_FONT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/apple_emoji.ttf"));
+static APPLE_INDEX: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/apple_emoji.index"));
+
+static USE_APPLE: AtomicBool = AtomicBool::new(true);
+
+pub fn set_use_apple(use_apple: bool) {
+    if USE_APPLE.swap(use_apple, Ordering::Relaxed) != use_apple {
+        forget();
+        crate::emoji_font::set_fallback_order(use_apple);
+    }
+}
+
+pub fn using_apple() -> bool {
+    USE_APPLE.load(Ordering::Relaxed)
+}
+
+fn current_font() -> (&'static [u8], &'static [u8]) {
+    if using_apple() {
+        (APPLE_FONT, APPLE_INDEX)
+    } else {
+        (FONT, INDEX)
+    }
+}
 
 /// The most bytes of pictures kept, which the cache lets go of at once: a filled
 /// cell keeps its own, so letting them go costs a redraw of what comes next. A
@@ -124,23 +144,25 @@ fn find(glyph: &str) -> Option<usize> {
 }
 
 fn count() -> usize {
-    u32::from_le_bytes(INDEX[0..4].try_into().expect("the index's count")) as usize
+    let (_, index) = current_font();
+    u32::from_le_bytes(index[0..4].try_into().expect("the index's count")) as usize
 }
 
 /// The name and the picture at `place` in the sorted list. An entry is where its
 /// name starts, u32, and how long it is, u16, then where its picture starts and
 /// how long it is, u32 each.
 fn entry(place: usize) -> (&'static str, &'static [u8]) {
+    let (font, index) = current_font();
     const ENTRY: usize = 14;
     let at = 4 + place * ENTRY;
     let u32_at =
-        |at: usize| u32::from_le_bytes(INDEX[at..at + 4].try_into().expect("a number")) as usize;
+        |at: usize| u32::from_le_bytes(index[at..at + 4].try_into().expect("a number")) as usize;
     let name_at = u32_at(at);
     let name_length =
-        u16::from_le_bytes(INDEX[at + 4..at + 6].try_into().expect("a name's length")) as usize;
+        u16::from_le_bytes(index[at + 4..at + 6].try_into().expect("a name's length")) as usize;
     let picture_at = u32_at(at + 6);
-    let name = std::str::from_utf8(&INDEX[name_at..name_at + name_length]).expect("a name");
-    (name, &FONT[picture_at..picture_at + u32_at(at + 10)])
+    let name = std::str::from_utf8(&index[name_at..name_at + name_length]).expect("a name");
+    (name, &font[picture_at..picture_at + u32_at(at + 10)])
 }
 
 #[cfg(test)]

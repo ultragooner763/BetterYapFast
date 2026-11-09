@@ -1156,6 +1156,8 @@ struct Layout {
     /// Long messages fold to a few lines, with Show more; off unless turned
     /// on.
     collapse_long: bool,
+    /// Apple emoji style instead of Twemoji; on by default.
+    apple_emoji: Option<bool>,
     /// When animations play.
     animate: Animate,
     /// The profile switches, each as [`Cosmetics`] starts it unless changed.
@@ -1482,6 +1484,9 @@ impl Layout {
         window.set_strip_tracking(self.strip_tracking.unwrap_or(true));
         window.set_show_nameplates(self.nameplates.unwrap_or(true));
         window.set_collapse_long(self.collapse_long);
+        let apple = self.apple_emoji.unwrap_or(true);
+        window.set_apple_emoji(apple);
+        crate::twemoji::set_use_apple(apple);
         window.set_animate(choice(&ANIMATES, self.animate));
         ANIMATE.set(self.animate);
         self.show_cosmetics(window);

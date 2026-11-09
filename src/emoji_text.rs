@@ -79,12 +79,7 @@ pub fn target(link: &str) -> Option<Target> {
 /// holds it: nothing copies it.
 pub fn register() {
     static REGISTERED: Once = Once::new();
-    REGISTERED.call_once(|| {
-        let font = fontique::Blob::new(std::sync::Arc::new(twemoji::FONT));
-        if !emoji_font::register_blob("Yapfast Twemoji", font) {
-            tracing::warn!("could not register a font of Twemoji");
-        }
-    });
+    REGISTERED.call_once(emoji_font::register_emojis);
 }
 
 /// `text` with each emoji that has a glyph drawn by it.

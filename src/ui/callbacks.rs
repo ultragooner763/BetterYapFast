@@ -1732,6 +1732,8 @@ pub(super) fn bind_callbacks(window: &YapfastWindow, adapter: &Rc<RefCell<Adapte
         layout.strip_tracking = Some(window.get_strip_tracking());
         layout.nameplates = Some(window.get_show_nameplates());
         layout.collapse_long = window.get_collapse_long();
+        layout.apple_emoji = Some(window.get_apple_emoji());
+        crate::twemoji::set_use_apple(window.get_apple_emoji());
         layout.animate = chosen(&ANIMATES, window.get_animate());
         ANIMATE.set(layout.animate);
         layout.read_cosmetics(&window);

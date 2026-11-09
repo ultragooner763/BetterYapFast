@@ -19,9 +19,21 @@ fn main() {
     println!("cargo:rerun-if-changed=packaging/windows");
     println!("cargo:rerun-if-env-changed=SKIA_BINARIES_URL");
     println!("cargo:rerun-if-changed=vendor/twemoji/72x72");
+    println!("cargo:rerun-if-changed=vendor/apple_emoji/72x72");
     println!("cargo:rerun-if-changed=src/emoji_font_tables.rs");
     if env::var_os("CARGO_FEATURE_DESKTOP").is_some() {
-        pack_twemoji();
+        pack_emoji_set(
+            Path::new("vendor/twemoji/72x72"),
+            "Yapfast Twemoji",
+            "twemoji.ttf",
+            "twemoji.index",
+        );
+        pack_emoji_set(
+            Path::new("vendor/apple_emoji/72x72"),
+            "Yapfast Apple Emoji",
+            "apple_emoji.ttf",
+            "apple_emoji.index",
+        );
     }
     match env::var("CARGO_CFG_TARGET_OS").as_deref() {
         Ok("windows") => windows_icon(),
@@ -36,8 +48,7 @@ fn main() {
 /// is, then the names. `src/twemoji.rs` reads both, and the picture's place in
 /// the sorted list is its glyph. Each picture gets the transparent margin the font's
 /// bitmaps have; `emoji_font_tables::MARGIN` says why.
-fn pack_twemoji() {
-    let folder = Path::new("vendor/twemoji/72x72");
+fn pack_emoji_set(folder: &Path, font_name: &str, ttf_file: &str, index_file: &str) {
     let mut pictures: Vec<(String, Vec<u8>)> = fs::read_dir(folder)
         .unwrap_or_else(|error| panic!("could not read {}: {error}", folder.display()))
         .filter_map(Result::ok)
@@ -56,7 +67,7 @@ fn pack_twemoji() {
         .collect();
     assert!(
         !pictures.is_empty(),
-        "vendor/twemoji/72x72 holds no pictures"
+        "{} holds no pictures", folder.display()
     );
     // Each picture is a few milliseconds' work, so they share the machine's threads.
     let threads = std::thread::available_parallelism().map_or(1, usize::from);
@@ -85,7 +96,7 @@ fn pack_twemoji() {
         .collect();
     let font = emoji_font_tables::build_strike(
         &emoji_font_tables::TWEMOJI,
-        "Yapfast Twemoji",
+        font_name,
         &glyphs,
         &also,
     );
@@ -109,8 +120,8 @@ fn pack_twemoji() {
         index.extend_from_slice(name.as_bytes());
     }
     let out = PathBuf::from(env::var_os("OUT_DIR").unwrap());
-    fs::write(out.join("twemoji.ttf"), font).expect("writing Twemoji's font");
-    fs::write(out.join("twemoji.index"), index).expect("writing Twemoji's index");
+    fs::write(out.join(ttf_file), font).unwrap_or_else(|e| panic!("writing {ttf_file}: {e}"));
+    fs::write(out.join(index_file), index).unwrap_or_else(|e| panic!("writing {index_file}: {e}"));
 }
 
 /// A PNG with the font's margin around it, kept small as Twemoji's are: most have a
