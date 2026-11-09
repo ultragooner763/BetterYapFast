@@ -1,6 +1,8 @@
 // Copyright © SixtyFPS GmbH <info@slint.dev>
 // SPDX-License-Identifier: GPL-3.0-only OR LicenseRef-Slint-Royalty-free-2.0 OR LicenseRef-Slint-Software-3.0
 
+pub use i_slint_common::styled_text::{FormattedSpan, Style, StyledTextParagraph};
+
 /// Styled text that has been parsed and separated into paragraphs
 ///
 /// Clones of a StyledText share the same underlying data, so cloning is cheap.
@@ -8,7 +10,7 @@
 #[derive(Debug, PartialEq, Clone, Default)]
 pub struct StyledText {
     /// Paragraphs of styled text
-    pub(crate) paragraphs: crate::SharedVector<i_slint_common::styled_text::StyledTextParagraph>,
+    pub paragraphs: crate::SharedVector<i_slint_common::styled_text::StyledTextParagraph>,
 }
 
 /// Error returned when [`StyledText::from_markdown`] cannot parse the provided markdown input.
@@ -48,6 +50,13 @@ impl StyledText {
         Self {
             paragraphs: [i_slint_common::styled_text::paragraph_from_plain_text(text.into())]
                 .into(),
+        }
+    }
+
+    /// Creates styled text from paragraphs.
+    pub fn from_paragraphs(paragraphs: alloc::vec::Vec<i_slint_common::styled_text::StyledTextParagraph>) -> Self {
+        Self {
+            paragraphs: paragraphs.into_iter().collect(),
         }
     }
 

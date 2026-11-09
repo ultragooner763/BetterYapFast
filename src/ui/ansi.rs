@@ -1,36 +1,124 @@
 //! Discord ANSI code block formatting for Slint StyledText.
 
-/// Formats text containing ANSI escape sequences (e.g. from Discord ```ansi code blocks)
-/// into Slint-compatible styled markdown with `<font color="...">`, `<b>`, and `<u>`.
-pub fn format_ansi(input: &str) -> String {
-    let mut output = String::with_capacity(input.len() * 2);
-    let mut in_color = false;
-    let mut in_bold = false;
-    let mut in_underline = false;
+use i_slint_core::styled_text::{FormattedSpan, Style, StyledTextParagraph};
 
-    let mut i = 0;
-    let bytes = input.as_bytes();
+const COLOR_GRAY: u32 = 0xFF4F545C; // 30
+const COLOR_RED: u32 = 0xFFED4245; // 31 - Discord Red
+const COLOR_GREEN: u32 = 0xFF57F287; // 32 - Discord Green
+const COLOR_YELLOW: u32 = 0xFFFEE75C; // 33 - Discord Yellow
+const COLOR_BLURPLE: u32 = 0xFF5865F2; // 34 - Discord Blurple
+const COLOR_PINK: u32 = 0xFFEB459E; // 35 - Discord Pink / Magenta
+const COLOR_CYAN: u32 = 0xFF00B0F4; // 36 - Discord Cyan
+const COLOR_WHITE: u32 = 0xFFFFFFFF; // 37 - Discord White
+
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
+pub struct AnsiState {
+    pub color: Option<u32>,
+    pub bold: bool,
+    pub underline: bool,
+}
+
+/// Checks whether `text` contains ANSI escape sequences.
+pub fn has_ansi(text: &str) -> bool {
+    let bytes = text.as_bytes();
     let len = bytes.len();
+    let mut i = 0;
+    while i < len {
+        if bytes[i] == 0x1b && i + 1 < len && bytes[i + 1] == b'[' {
+            return true;
+        }
+        if bytes[i] == b'[' && is_likely_ansi(text, i) {
+            return true;
+        }
+        i += 1;
+    }
+    false
+}
+
+fn is_likely_ansi(input: &str, at: usize) -> bool {
+    let slice = &input[at + 1..];
+    if let Some(m_pos) = slice.find('m') {
+        m_pos > 0
+            && m_pos <= 16
+            && slice[..m_pos]
+                .chars()
+                .all(|c| c.is_ascii_digit() || c == ';')
+    } else {
+        false
+    }
+}
+
+/// Parses text containing ANSI escape sequences into a native Slint `StyledText`
+/// without relying on Markdown or HTML parsing.
+pub fn parse_ansi(input: &str) -> slint::StyledText {
+    let mut paragraphs = Vec::new();
+    let mut state = AnsiState::default();
+
+    for line in input.split('\n') {
+        let (para_text, formatting) = parse_line(line, &mut state);
+        paragraphs.push(StyledTextParagraph {
+            text: para_text,
+            formatting,
+            links: Vec::new(),
+        });
+    }
+
+    slint::StyledText::from_paragraphs(paragraphs)
+}
+
+fn parse_line(line: &str, state: &mut AnsiState) -> (String, Vec<FormattedSpan>) {
+    let mut text = String::with_capacity(line.len());
+    let mut formatting = Vec::new();
+
+    let bytes = line.as_bytes();
+    let len = bytes.len();
+    let mut i = 0;
+
+    let mut span_start = 0;
+
+    let flush_span = |span_start: usize,
+                      end: usize,
+                      state: &AnsiState,
+                      formatting: &mut Vec<FormattedSpan>| {
+        if end > span_start {
+            let range = span_start..end;
+            if let Some(color) = state.color {
+                formatting.push(FormattedSpan {
+                    range: range.clone(),
+                    style: Style::Color(color),
+                });
+            }
+            if state.bold {
+                formatting.push(FormattedSpan {
+                    range: range.clone(),
+                    style: Style::Strong,
+                });
+            }
+            if state.underline {
+                formatting.push(FormattedSpan {
+                    range,
+                    style: Style::Underline,
+                });
+            }
+        }
+    };
 
     while i < len {
         let is_esc = bytes[i] == 0x1b && i + 1 < len && bytes[i + 1] == b'[';
-        let is_bracket = bytes[i] == b'['
-            && i + 1 < len
-            && (bytes[i + 1].is_ascii_digit() || bytes[i + 1] == b';');
+        let is_bracket = bytes[i] == b'[' && is_likely_ansi(line, i);
 
-        if is_esc || (is_bracket && is_likely_ansi(input, i)) {
+        if is_esc || is_bracket {
             let start = if is_esc { i + 2 } else { i + 1 };
-            if let Some(m_pos) = input[start..].find('m') {
-                if m_pos <= 10 {
-                    let code_str = &input[start..start + m_pos];
+            if let Some(m_pos) = line[start..].find('m') {
+                if m_pos <= 16 {
+                    let code_str = &line[start..start + m_pos];
                     if code_str.chars().all(|c| c.is_ascii_digit() || c == ';') {
-                        apply_ansi_codes(
-                            code_str,
-                            &mut output,
-                            &mut in_color,
-                            &mut in_bold,
-                            &mut in_underline,
-                        );
+                        // Flush active span before style change
+                        flush_span(span_start, text.len(), state, &mut formatting);
+
+                        apply_ansi_codes(code_str, state);
+
+                        span_start = text.len();
                         i = start + m_pos + 1;
                         continue;
                     }
@@ -38,108 +126,58 @@ pub fn format_ansi(input: &str) -> String {
             }
         }
 
-        let ch = input[i..].chars().next().unwrap();
-        match ch {
-            '&' => output.push_str("&amp;"),
-            '<' => output.push_str("&lt;"),
-            '>' => output.push_str("&gt;"),
-            '*' => output.push_str("\\*"),
-            '_' => output.push_str("\\_"),
-            '~' => output.push_str("\\~"),
-            '`' => output.push_str("\\`"),
-            c => output.push(c),
-        }
+        let ch = line[i..].chars().next().unwrap();
+        text.push(ch);
         i += ch.len_utf8();
     }
 
-    if in_bold {
-        output.push_str("</b>");
-    }
-    if in_underline {
-        output.push_str("</u>");
-    }
-    if in_color {
-        output.push_str("</font>");
-    }
+    // Flush any remaining active span to the end of the line
+    flush_span(span_start, text.len(), state, &mut formatting);
 
-    output
+    (text, formatting)
 }
 
-fn is_likely_ansi(input: &str, at: usize) -> bool {
-    let slice = &input[at + 1..];
-    if let Some(m_pos) = slice.find('m') {
-        m_pos <= 10 && slice[..m_pos].chars().all(|c| c.is_ascii_digit() || c == ';')
-    } else {
-        false
+fn apply_ansi_codes(codes: &str, state: &mut AnsiState) {
+    let parts: Vec<u32> = codes.split(';').filter_map(|s| s.parse().ok()).collect();
+    if parts.is_empty() {
+        return;
     }
-}
 
-fn apply_ansi_codes(
-    codes: &str,
-    output: &mut String,
-    in_color: &mut bool,
-    in_bold: &mut bool,
-    in_underline: &mut bool,
-) {
-    let mut new_color = None;
-    let mut new_bold = None;
-    let mut new_underline = None;
-    let mut reset = false;
-
-    for part in codes.split(';') {
-        let Ok(num) = part.parse::<u32>() else { continue };
-        match num {
-            0 => reset = true,
-            1 => new_bold = Some(true),
-            4 => new_underline = Some(true),
-            // Standard colors
-            30 => new_color = Some("#4f545c"),
-            31 => new_color = Some("#ed4245"), // Discord Vibrant Red
-            32 => new_color = Some("#57f287"), // Discord Vibrant Green
-            33 => new_color = Some("#fee75c"), // Discord Vibrant Yellow
-            34 => new_color = Some("#5865f2"), // Discord Blurple
-            35 => new_color = Some("#eb459e"), // Discord Pink
-            36 => new_color = Some("#00b0f4"), // Discord Cyan
-            37 => new_color = Some("#ffffff"), // Discord White
+    let mut idx = 0;
+    while idx < parts.len() {
+        let code = parts[idx];
+        match code {
+            0 => {
+                state.color = None;
+                state.bold = false;
+                state.underline = false;
+            }
+            1 => state.bold = true,
+            4 => state.underline = true,
+            22 => state.bold = false,
+            24 => state.underline = false,
+            30 => state.color = Some(COLOR_GRAY),
+            31 => state.color = Some(COLOR_RED),
+            32 => state.color = Some(COLOR_GREEN),
+            33 => state.color = Some(COLOR_YELLOW),
+            34 => state.color = Some(COLOR_BLURPLE),
+            35 => state.color = Some(COLOR_PINK),
+            36 => state.color = Some(COLOR_CYAN),
+            37 => state.color = Some(COLOR_WHITE),
+            39 => state.color = None,
+            38 => {
+                // Extended color: 38;2;r;g;b
+                if idx + 4 < parts.len() && parts[idx + 1] == 2 {
+                    let r = (parts[idx + 2] & 0xFF) as u32;
+                    let g = (parts[idx + 3] & 0xFF) as u32;
+                    let b = (parts[idx + 4] & 0xFF) as u32;
+                    state.color = Some(0xFF000000 | (r << 16) | (g << 8) | b);
+                    idx += 4;
+                }
+            }
             _ => {}
         }
-    }
-
-    if reset {
-        if *in_bold {
-            output.push_str("</b>");
-            *in_bold = false;
-        }
-        if *in_underline {
-            output.push_str("</u>");
-            *in_underline = false;
-        }
-        if *in_color {
-            output.push_str("</font>");
-            *in_color = false;
-        }
-    }
-
-    if let Some(color) = new_color {
-        if *in_color {
-            output.push_str("</font>");
-        }
-        output.push_str(&format!("<font color=\"{color}\">"));
-        *in_color = true;
-    }
-
-    if let Some(true) = new_bold {
-        if !*in_bold {
-            output.push_str("<b>");
-            *in_bold = true;
-        }
-    }
-
-    if let Some(true) = new_underline {
-        if !*in_underline {
-            output.push_str("<u>");
-            *in_underline = true;
-        }
+        idx += 1;
     }
 }
 
@@ -148,16 +186,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_discord_ansi() {
-        let input = "\x1b[1;31mПравила\x1b[0m";
-        let formatted = format_ansi(input);
-        assert_eq!(formatted, "<font color=\"#ed4245\"><b>Правила</b></font>");
-    }
+    fn parses_discord_rules_message() {
+        let input = "[1;31m╭───『 [1;31mПравила [0m [1;31m 』\n|   [31m1 не кикать сокланов\n|   2 не нападать на союзкланов\n|   3 визиторы не люди\n|   4 соблюдать правила\n|   5 решение проверки примерно\n|   6 приписки обязательны\n|   7 за злоупотребление чинов выеб [0m\n[1;31m╰──────────────────────────────────────────[0m";
+        let styled = parse_ansi(input);
+        assert_eq!(styled.paragraphs.len(), 9);
+        assert_eq!(styled.paragraphs[0].text, "╭───『 Правила   』");
+        assert_eq!(styled.paragraphs[1].text, "|   1 не кикать сокланов");
+        assert_eq!(styled.paragraphs[2].text, "|   2 не нападать на союзкланов");
+        assert_eq!(styled.paragraphs[7].text, "|   7 за злоупотребление чинов выеб ");
+        assert_eq!(styled.paragraphs[8].text, "╰──────────────────────────────────────────");
 
-    #[test]
-    fn parses_stripped_ansi() {
-        let input = "[1;31mПравила[0m";
-        let formatted = format_ansi(input);
-        assert_eq!(formatted, "<font color=\"#ed4245\"><b>Правила</b></font>");
+        // Line 2 has inherited red color
+        assert_eq!(styled.paragraphs[2].formatting[0].style, Style::Color(COLOR_RED));
+        // Line 8 has red color
+        assert_eq!(styled.paragraphs[8].formatting[0].style, Style::Color(COLOR_RED));
+        assert_eq!(styled.paragraphs[8].formatting[1].style, Style::Strong);
     }
 }

@@ -225,6 +225,9 @@ fn styled(body: &str) -> slint::StyledText {
 /// [`styled`], or `typed` as plain text when Slint rejects the Markdown. A
 /// link showing other text than where it goes asks before it opens.
 fn styled_or(body: &str, typed: &str) -> slint::StyledText {
+    if super::ansi::has_ansi(typed) {
+        return super::ansi::parse_ansi(typed);
+    }
     let body = no_rules(body);
     let body = keep_blank_lines(&body);
     slint::StyledText::from_markdown(&links::linkify(&links::mark_masked(&body)))
@@ -1041,15 +1044,8 @@ fn blocks_of(
         let typed = block.text(markdown);
         let text = match block.kind {
             Kind::Code => {
-                if typed.contains("\x1b[")
-                    || typed.contains(";3")
-                    || typed.contains("[3")
-                    || typed.contains("[0m")
-                    || typed.contains("[1;")
-                {
-                    let formatted = super::ansi::format_ansi(&typed);
-                    slint::StyledText::from_markdown(&formatted)
-                        .unwrap_or_else(|_| slint::StyledText::from_plain_text(&typed))
+                if super::ansi::has_ansi(&typed) {
+                    super::ansi::parse_ansi(&typed)
                 } else {
                     slint::StyledText::from_plain_text(&typed)
                 }
@@ -1058,18 +1054,22 @@ fn blocks_of(
             Kind::Subtext => styled_or(&prepare(block, &typed), &typed),
             // Discord's client shows every line, blank or not.
             Kind::Text => {
-                let prepared = prepare(block, &typed);
-                let lines: Vec<&str> = prepared
-                    .split('\n')
-                    .map(|line| {
-                        if line.trim().is_empty() {
-                            "\u{a0}"
-                        } else {
-                            line
-                        }
-                    })
-                    .collect();
-                styled_or(&lines.join("\n"), &typed)
+                if super::ansi::has_ansi(&typed) {
+                    super::ansi::parse_ansi(&typed)
+                } else {
+                    let prepared = prepare(block, &typed);
+                    let lines: Vec<&str> = prepared
+                        .split('\n')
+                        .map(|line| {
+                            if line.trim().is_empty() {
+                                "\u{a0}"
+                            } else {
+                                line
+                            }
+                        })
+                        .collect();
+                    styled_or(&lines.join("\n"), &typed)
+                }
             }
         };
         let starts_quote = block.quoted && !before.is_some_and(|before| before.quoted);
