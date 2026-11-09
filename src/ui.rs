@@ -63,6 +63,7 @@ mod theme;
 mod tiles;
 mod title_bar;
 mod wallpaper;
+mod font;
 mod yapfast;
 
 use callbacks::bind_callbacks;
@@ -513,6 +514,33 @@ fn watch_window(window: &YapfastWindow, adapter: &Rc<RefCell<Adapter>>) {
                             adapter.borrow_mut().set_talk_key(&window, recorded);
                         }
                     });
+                    return EventResult::PreventDefault;
+                }
+                // Mouse side buttons (XBUTTON1 / XBUTTON2) navigate back and forward through channels and history
+                if let WindowEvent::MouseInput {
+                    state: ElementState::Pressed,
+                    button: MouseButton::Back,
+                    ..
+                } = event
+                {
+                    if let (Some(adapter), Some(window)) = (adapter.upgrade(), weak.upgrade()) {
+                        if let Ok(mut adapter) = adapter.try_borrow_mut() {
+                            adapter.action(&window, Action::NavigateBack);
+                        }
+                    }
+                    return EventResult::PreventDefault;
+                }
+                if let WindowEvent::MouseInput {
+                    state: ElementState::Pressed,
+                    button: MouseButton::Forward,
+                    ..
+                } = event
+                {
+                    if let (Some(adapter), Some(window)) = (adapter.upgrade(), weak.upgrade()) {
+                        if let Ok(mut adapter) = adapter.try_borrow_mut() {
+                            adapter.action(&window, Action::NavigateForward);
+                        }
+                    }
                     return EventResult::PreventDefault;
                 }
                 // While recording the push-to-talk key, the next key becomes
@@ -1158,6 +1186,9 @@ struct Layout {
     collapse_long: bool,
     /// Apple emoji style instead of Twemoji; on by default.
     apple_emoji: Option<bool>,
+    custom_font: Option<String>,
+    custom_font_path: Option<String>,
+    font_size: Option<f32>,
     /// When animations play.
     animate: Animate,
     /// The profile switches, each as [`Cosmetics`] starts it unless changed.
@@ -1487,6 +1518,24 @@ impl Layout {
         let apple = self.apple_emoji.unwrap_or(true);
         window.set_apple_emoji(apple);
         crate::twemoji::set_use_apple(apple);
+        if let Some(font_path) = &self.custom_font_path {
+            let p = std::path::Path::new(font_path);
+            if p.exists() {
+                let _ = crate::custom_font::load_and_register_font(p);
+            }
+        }
+        if let Some(font) = &self.custom_font {
+            let style = window.global::<ClientStyle>();
+            style.set_native_font(font.as_str().into());
+            if let Some(path) = &self.custom_font_path {
+                style.set_custom_font_path(path.as_str().into());
+            }
+            crate::emoji_font::set_fallback_order(crate::twemoji::using_apple());
+        }
+        if let Some(size) = self.font_size {
+            let style = window.global::<ClientStyle>();
+            style.set_font_size_custom(size);
+        }
         window.set_animate(choice(&ANIMATES, self.animate));
         ANIMATE.set(self.animate);
         self.show_cosmetics(window);

@@ -232,6 +232,7 @@ pub(super) fn bind_callbacks(window: &YapfastWindow, adapter: &Rc<RefCell<Adapte
     super::channel_settings::bind(window, adapter);
     super::title_bar::bind(window, adapter);
     super::wallpaper::register_callbacks(window);
+    super::font::register_callbacks(window, adapter);
     // UI bindings can request images while refresh borrows the adapter.
     // Deliver their requests in one batch after the current UI work.
     let pending = Rc::new(RefCell::new(HashSet::new()));
@@ -1782,6 +1783,9 @@ pub(super) fn bind_callbacks(window: &YapfastWindow, adapter: &Rc<RefCell<Adapte
         layout.wallpaper_blur = Some(wp.get_blur());
         layout.wallpaper_dim = Some(wp.get_dim());
         layout.wallpapers = super::wallpaper::get_saved_wallpapers();
+        let style = window.global::<ClientStyle>();
+        layout.custom_font = Some(style.get_native_font().as_str().to_string());
+        layout.custom_font_path = Some(style.get_custom_font_path().as_str().to_string());
         adapter.layout.write(&adapter.root);
         adapter.watch_talk_key(&window);
         let start = window.get_start_on_sign_in();

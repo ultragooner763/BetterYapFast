@@ -4,8 +4,15 @@ export global ClientStyle {
     in-out property <bool> enabled: true;
     // An open-licensed, bundled face gives every platform the same text metrics.
     in-out property <string> native-font: "DM Sans";
+    in-out property <string> custom-font-path: "";
+    in-out property <int> font-preset: 0;
+    in-out property <length> font-size-custom: 15px;
+    callback choose-custom-font();
+    callback select-font-preset(int, string);
+    callback set-font-size(length);
+    callback reset-font();
     out property <string> font-family: self.enabled ? self.native-font : "Atkinson Hyperlegible Next";
-    out property <length> text-size: self.enabled ? 15px : 16px;
+    out property <length> text-size: self.enabled ? self.font-size-custom : 16px;
     out property <length> sidebar-width: self.enabled ? 304px : 240px;
     // Discord's header rows: 48px between its outline and the line under them, 50px with both.
     out property <length> header-height: self.enabled ? 50px : 48px;
