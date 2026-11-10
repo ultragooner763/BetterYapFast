@@ -1516,6 +1516,37 @@ impl Api {
         self.json(self.request(Method::GET, &path)).await
     }
 
+    /// Fetches guild join requests for membership screening / manual verification.
+    /// `status` can be "PENDING", "APPROVED", or "REJECTED".
+    pub async fn guild_join_requests(&self, guild: &str, status: &str) -> Result<Value> {
+        let path = format!("/guilds/{guild}/join-requests?status={status}&limit=50");
+        self.json(self.request(Method::GET, &path)).await
+    }
+
+    /// Approves or rejects a member join request.
+    pub async fn act_join_request(
+        &self,
+        guild: &str,
+        user: &str,
+        approve: bool,
+        reason: Option<&str>,
+    ) -> Result<Value> {
+        let action = if approve { "APPROVE" } else { "REJECT" };
+        let mut body = json!({ "action": action });
+        if let Some(r) = reason {
+            body["rejection_reason"] = json!(r);
+        }
+        let path = format!("/guilds/{guild}/join-requests/{user}");
+        let request = with_json(self.request(Method::PUT, &path), &body);
+        match self.json(request).await {
+            Ok(val) => Ok(val),
+            Err(err) => {
+                let patch = with_json(self.request(Method::PATCH, &path), &body);
+                self.json(patch).await.or(Err(err))
+            }
+        }
+    }
+
     /// Revokes an invite, as Invites' X does.
     pub async fn revoke_invite(&self, code: &str) -> Result<()> {
         let path = format!("/invites/{}", encode(code));

@@ -2938,6 +2938,19 @@ pub enum DiscordCommand {
         server: String,
         query: MembersQuery,
     },
+    /// Membership screening join requests for a Discord server;
+    /// [`Event::JoinRequestsLoaded`] follows.
+    JoinRequests {
+        server: String,
+        status: String,
+    },
+    /// Approve or reject a join request;
+    /// [`Event::JoinRequestActed`] follows.
+    ActJoinRequest {
+        server: String,
+        user: String,
+        approve: bool,
+    },
     /// What Invites asks of Discord; [`Event::InvitesLoaded`],
     /// [`Event::InviteRevoked`] or [`Event::ServerPaused`] follows.
     Invites {
@@ -3347,6 +3360,29 @@ pub enum JoinMethod {
     /// Manual verification, with the invite's code if any.
     Manual(Option<String>),
     LinkedChannel,
+}
+
+/// A question's response in a membership screening application.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct FormResponse {
+    pub field_type: String,
+    pub label: String,
+    pub response: String,
+}
+
+/// A member join request as Membership Screening / Join Requests shows it.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct JoinRequest {
+    pub id: String,
+    pub user_id: String,
+    pub username: String,
+    pub global_name: Option<String>,
+    pub avatar: String,
+    pub initial: String,
+    pub created_at: String,
+    pub application_status: String,
+    pub form_responses: Vec<FormResponse>,
+    pub rejection_reason: Option<String>,
 }
 
 /// A server's custom emoji, as Emoji lists it.
@@ -3987,6 +4023,19 @@ pub enum Event {
     MembersIndexing {
         server: String,
         query: MembersQuery,
+    },
+    /// Join requests loaded for membership screening.
+    JoinRequestsLoaded {
+        server: String,
+        status: String,
+        requests: Result<Vec<JoinRequest>, String>,
+    },
+    /// Join request approved or rejected.
+    JoinRequestActed {
+        server: String,
+        user: String,
+        approve: bool,
+        result: Result<(), String>,
     },
     /// A server's invites again, or why not.
     InvitesLoaded {

@@ -1922,6 +1922,10 @@ pub enum Action {
     /// what changed, as the bar's Reset and Save Changes do; or close
     /// them. Leaving a page with unsaved changes shakes the bar instead.
     OpenServerSettings(String),
+    OpenServerSettingsSection {
+        place: String,
+        section: chat::SettingsSection,
+    },
     ServerSettingsSection(chat::SettingsSection),
     WriteServerSetting {
         field: SettingsText,
@@ -3286,6 +3290,9 @@ impl Application {
                 vec![]
             }
             Action::OpenServerSettings(place) => self.open_server_settings(place),
+            Action::OpenServerSettingsSection { place, section } => {
+                self.open_server_settings_section(place, section)
+            }
             Action::ServerSettingsSection(section) => self.server_settings_section(section),
             Action::WriteServerSetting { field, text } => {
                 self.write_server_setting(field, text);
@@ -3972,6 +3979,17 @@ impl Application {
                 result,
             } => return self.members_found(server, query, result),
             Event::MembersIndexing { server, query } => self.members_indexing(server, query),
+            Event::JoinRequestsLoaded {
+                server,
+                status,
+                requests,
+            } => self.join_requests_loaded(server, status, requests),
+            Event::JoinRequestActed {
+                server,
+                user,
+                approve,
+                result,
+            } => return self.join_request_acted(server, user, approve, result),
             Event::InvitesLoaded { server, result } => self.invites_loaded(server, result),
             Event::InviteRevoked {
                 server,

@@ -221,6 +221,8 @@ export component YapfastWindow inherits Window {
     in property <EventPrompt> event-prompt;
     callback toggle-event-interest;
     callback close-event;
+    callback open-server-members;
+    callback open-server-boosts;
     // A dialog that makes, copies or deletes a Discord channel or category,
     // with what's written in it; see ChannelDialog.
     in property <bool> channel-open;
@@ -2427,6 +2429,44 @@ export component YapfastWindow inherits Window {
                                 accessible-role: button;
                                 accessible-label: root.header-events + " events";
                                 accessible-action-default => { root.open-events-menu(self.absolute-position.x + 8px, self.absolute-position.y + self.height - 8px); }
+                            }
+                            // Discord's Members row under the server's name.
+                            if ClientStyle.enabled && root.header-server != "": members-sidebar-row := Rectangle {
+                                height: 38px;
+                                Image { x: 16px; y: (parent.height - self.height) / 2; width: 18px; height: 18px; source: @image-url("icons/users.svg"); colorize: Theme.muted; accessible-role: none; }
+                                Text {
+                                    x: 44px; width: parent.width - 60px; height: parent.height;
+                                    text: "Members";
+                                    font-size: 14px; font-weight: 500; color: Theme.muted;
+                                    vertical-alignment: center; overflow: elide;
+                                }
+                                members-touch := TouchArea {
+                                    mouse-cursor: MouseCursor.pointer;
+                                    clicked => { root.open-server-members(); }
+                                }
+                                if members-touch.has-hover: Rectangle { background: Theme.hover; border-radius: 6px; x: 8px; width: parent.width - 16px; y: 2px; height: parent.height - 4px; z: -1; }
+                                accessible-role: button;
+                                accessible-label: "Members";
+                                accessible-action-default => { root.open-server-members(); }
+                            }
+                            // Discord's Server Boosts row.
+                            if ClientStyle.enabled && root.header-server != "": boosts-sidebar-row := Rectangle {
+                                height: 34px;
+                                Image { x: 16px; y: (parent.height - self.height) / 2; width: 18px; height: 18px; source: @image-url("icons/gem.svg"); colorize: Theme.muted; accessible-role: none; }
+                                Text {
+                                    x: 44px; width: parent.width - 60px; height: parent.height;
+                                    text: "Server Boosts";
+                                    font-size: 14px; font-weight: 500; color: Theme.muted;
+                                    vertical-alignment: center; overflow: elide;
+                                }
+                                boosts-touch := TouchArea {
+                                    mouse-cursor: MouseCursor.pointer;
+                                    clicked => { root.open-server-boosts(); }
+                                }
+                                if boosts-touch.has-hover: Rectangle { background: Theme.hover; border-radius: 6px; x: 8px; width: parent.width - 16px; y: 2px; height: parent.height - 4px; z: -1; }
+                                accessible-role: button;
+                                accessible-label: "Server Boosts";
+                                accessible-action-default => { root.open-server-boosts(); }
                             }
                             // Discord's channel list starts at its first category: Ctrl+K finds channels.
                             if !ClientStyle.enabled: HorizontalLayout {

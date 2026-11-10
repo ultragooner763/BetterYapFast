@@ -9,16 +9,101 @@ impl Application {
         let Some((server, page)) = self.members_page(None) else {
             return vec![];
         };
-        let query = match input {
-            MemberInput::Search(text) => page.search(text),
-            MemberInput::Sort(sort) => page.sort_by(sort),
-            MemberInput::Page(to) => page.go(to),
-            MemberInput::PageSize(size) => page.resize(size),
-        };
-        query
-            .map(|query| members(server, query))
-            .into_iter()
-            .collect()
+        match input {
+            MemberInput::Search(text) => page
+                .search(text)
+                .map(|query| members(server, query))
+                .into_iter()
+                .collect(),
+            MemberInput::Sort(sort) => page
+                .sort_by(sort)
+                .map(|query| members(server, query))
+                .into_iter()
+                .collect(),
+            MemberInput::Page(to) => page
+                .go(to)
+                .map(|query| members(server, query))
+                .into_iter()
+                .collect(),
+            MemberInput::PageSize(size) => page
+                .resize(size)
+                .map(|query| members(server, query))
+                .into_iter()
+                .collect(),
+            MemberInput::Tab(tab) => {
+                page.set_tab(tab);
+                page.applications_fetching = true;
+                let status = match tab {
+                    1 => "PENDING",
+                    2 => "REJECTED",
+                    3 => "APPROVED",
+                    _ => return vec![],
+                };
+                vec![Effect::Backend(Command::Discord(DiscordCommand::JoinRequests {
+                    server,
+                    status: status.to_owned(),
+                }))]
+            }
+            MemberInput::Approve(user) => {
+                vec![Effect::Backend(Command::Discord(DiscordCommand::ActJoinRequest {
+                    server,
+                    user,
+                    approve: true,
+                }))]
+            }
+            MemberInput::Reject(user) => {
+                vec![Effect::Backend(Command::Discord(DiscordCommand::ActJoinRequest {
+                    server,
+                    user,
+                    approve: false,
+                }))]
+            }
+            MemberInput::RefreshRequests => {
+                let status = match page.tab {
+                    1 => "PENDING",
+                    2 => "REJECTED",
+                    3 => "APPROVED",
+                    _ => "PENDING",
+                };
+                page.applications_fetching = true;
+                vec![Effect::Backend(Command::Discord(DiscordCommand::JoinRequests {
+                    server,
+                    status: status.to_owned(),
+                }))]
+            }
+        }
+    }
+
+    pub(in crate::application) fn join_requests_loaded(
+        &mut self,
+        server: String,
+        _status: String,
+        result: Result<Vec<crate::chat::JoinRequest>, String>,
+    ) {
+        if let Some((_, page)) = self.members_page(Some(&server)) {
+            match result {
+                Ok(requests) => page.set_applications(requests),
+                Err(_) => page.applications_fetching = false,
+            }
+        }
+    }
+
+    pub(in crate::application) fn join_request_acted(
+        &mut self,
+        server: String,
+        user: String,
+        approve: bool,
+        result: Result<(), String>,
+    ) -> Vec<Effect> {
+        if let Some((_, page)) = self.members_page(Some(&server)) {
+            if result.is_ok() {
+                page.remove_application(&user);
+                if approve {
+                    return self.members_again();
+                }
+            }
+        }
+        vec![]
     }
 
     /// Members searches again, as after one of them changed.

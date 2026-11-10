@@ -1100,6 +1100,36 @@ fn members_prompt(page: &MembersPage, roles: &[ServerRole], join_method: bool) -
         })
         .collect();
     let empty = page.members.is_empty() && page.fetching();
+    let applications: Vec<MemberApplicationRow> = page
+        .applications
+        .iter()
+        .map(|app| {
+            let responses: Vec<ApplicationResponse> = app
+                .form_responses
+                .iter()
+                .map(|fr| ApplicationResponse {
+                    label: fr.label.as_str().into(),
+                    response: fr.response.as_str().into(),
+                })
+                .collect();
+            let applied = if !app.created_at.is_empty() {
+                app.created_at.as_str().into()
+            } else {
+                "Recently".into()
+            };
+            MemberApplicationRow {
+                id: app.id.as_str().into(),
+                user_id: app.user_id.as_str().into(),
+                name: app.global_name.as_deref().unwrap_or(&app.username).into(),
+                username: app.username.as_str().into(),
+                avatar_url: app.avatar.as_str().into(),
+                initial: app.initial.as_str().into(),
+                applied,
+                status: app.application_status.as_str().into(),
+                responses: ModelRc::new(VecModel::from(responses)),
+            }
+        })
+        .collect();
     MembersPrompt {
         rows: ModelRc::new(VecModel::from(rows)),
         searched: page.searched(),
@@ -1119,6 +1149,10 @@ fn members_prompt(page: &MembersPage, roles: &[ServerRole], join_method: bool) -
         fetching: page.fetching(),
         indexing: page.indexing,
         join_method,
+        tab: i32::from(page.tab),
+        applications: ModelRc::new(VecModel::from(applications)),
+        applications_fetching: page.applications_fetching,
+        pending_count: i32::try_from(page.pending_count).unwrap_or_default(),
     }
 }
 
@@ -1134,6 +1168,15 @@ fn member_input(what: i32, text: SharedString, number: i32) -> Option<Action> {
             user: text.into(),
             large: true,
         },
+        5 => Action::Members(MemberInput::Tab(u8::try_from(number).unwrap_or(0))),
+        6 => {
+            if number == 1 {
+                Action::Members(MemberInput::Approve(text.into()))
+            } else {
+                Action::Members(MemberInput::Reject(text.into()))
+            }
+        }
+        7 => Action::Members(MemberInput::RefreshRequests),
         _ => return None,
     })
 }

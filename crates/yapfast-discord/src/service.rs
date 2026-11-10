@@ -1646,6 +1646,20 @@ impl Discord {
         self.api.revoke_invite(code).await
     }
 
+    pub async fn guild_join_requests(&self, guild: &str, status: &str) -> Result<Value> {
+        self.api.guild_join_requests(guild, status).await
+    }
+
+    pub async fn act_join_request(
+        &self,
+        guild: &str,
+        user: &str,
+        approve: bool,
+        reason: Option<&str>,
+    ) -> Result<Value> {
+        self.api.act_join_request(guild, user, approve, reason).await
+    }
+
     pub async fn guild_emojis(&self, guild: &str) -> Result<Vec<server_settings::GuildEmoji>> {
         let emojis = self.api.guild_emojis(guild).await?;
         Ok(emojis

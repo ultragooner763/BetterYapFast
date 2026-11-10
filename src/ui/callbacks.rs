@@ -2855,6 +2855,36 @@ pub(super) fn bind_callbacks(window: &YapfastWindow, adapter: &Rc<RefCell<Adapte
     });
     let state = adapter.clone();
     let weak = window.as_weak();
+    window.on_open_server_members(move || {
+        let Some(window) = weak.upgrade() else { return };
+        let server = window.get_header_server().to_string();
+        if !server.is_empty() {
+            state.borrow_mut().action(
+                &window,
+                Action::OpenServerSettingsSection {
+                    place: server,
+                    section: yapfast_core::chat::SettingsSection::Members,
+                },
+            );
+        }
+    });
+    let state = adapter.clone();
+    let weak = window.as_weak();
+    window.on_open_server_boosts(move || {
+        let Some(window) = weak.upgrade() else { return };
+        let server = window.get_header_server().to_string();
+        if !server.is_empty() {
+            state.borrow_mut().action(
+                &window,
+                Action::OpenServerSettingsSection {
+                    place: server,
+                    section: yapfast_core::chat::SettingsSection::BoostPerks,
+                },
+            );
+        }
+    });
+    let state = adapter.clone();
+    let weak = window.as_weak();
     window.on_join_unmuted(move || {
         if let Some(window) = weak.upgrade() {
             state.borrow_mut().action(&window, Action::UnmuteOnJoin);

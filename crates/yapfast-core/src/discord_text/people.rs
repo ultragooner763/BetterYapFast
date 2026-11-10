@@ -13,8 +13,15 @@ use yapfast_discord::{
 
 use super::{commands::NOT_DISCORD, *};
 use crate::chat::{
-    InvitesAction, JoinMethod, ListedMember, MembersQuery, RoleMember, ServerInvite,
+    FormResponse, InvitesAction, JoinMethod, JoinRequest, ListedMember, MembersQuery, RoleMember, ServerInvite,
 };
+
+enum PeopleWork {
+    Members(MembersQuery),
+    Invites(InvitesAction),
+    JoinRequests(String),
+    ActJoinRequest { user: String, approve: bool },
+}
 
 /// How many times Members asks again while Discord indexes the server, as
 /// Discord's client does.
@@ -34,26 +41,39 @@ pub(super) fn command(
     events: &UnboundedSender<Event>,
 ) -> Option<Command> {
     let (server, work) = match command {
-        Command::Discord(DiscordCommand::Members { server, query }) => (server, Ok(query)),
-        Command::Discord(DiscordCommand::Invites { server, action }) => (server, Err(action)),
+        Command::Discord(DiscordCommand::Members { server, query }) => (server, PeopleWork::Members(query)),
+        Command::Discord(DiscordCommand::Invites { server, action }) => (server, PeopleWork::Invites(action)),
+        Command::Discord(DiscordCommand::JoinRequests { server, status }) => (server, PeopleWork::JoinRequests(status)),
+        Command::Discord(DiscordCommand::ActJoinRequest { server, user, approve }) => (server, PeopleWork::ActJoinRequest { user, approve }),
         other => return Some(other),
     };
     let (Ok(discord), Some(guild)) = (discord, discord::parse_server(&server)) else {
         let why = discord.err().unwrap_or(NOT_DISCORD).to_owned();
         let _ = events.send(match work {
-            Ok(query) => Event::MembersFound {
+            PeopleWork::Members(query) => Event::MembersFound {
                 server,
                 query,
                 result: Err(why),
             },
-            Err(action) => refused(server, action, why),
+            PeopleWork::Invites(action) => refused(server, action, why),
+            PeopleWork::JoinRequests(status) => Event::JoinRequestsLoaded {
+                server,
+                status,
+                requests: Err(why),
+            },
+            PeopleWork::ActJoinRequest { user, approve } => Event::JoinRequestActed {
+                server,
+                user,
+                approve,
+                result: Err(why),
+            },
         });
         return None;
     };
     let (discord, guild, events) = (discord.clone(), guild.to_owned(), events.clone());
     tokio::spawn(async move {
         match work {
-            Ok(query) => {
+            PeopleWork::Members(query) => {
                 let result = members(&discord, &guild, &server, &query, &events).await;
                 let _ = events.send(Event::MembersFound {
                     server,
@@ -61,9 +81,50 @@ pub(super) fn command(
                     result,
                 });
             }
-            Err(action) => {
+            PeopleWork::Invites(action) => {
                 let event = invites(&discord, &guild, server, action).await;
                 let _ = events.send(event);
+            }
+            PeopleWork::JoinRequests(status) => {
+                let requests = match discord.guild_join_requests(&guild, &status).await {
+                    Ok(val) => Ok(yapfast_discord::server_settings::parse_join_requests(&val)
+                        .into_iter()
+                        .map(|r| JoinRequest {
+                            id: r.id,
+                            user_id: r.user_id,
+                            username: r.username,
+                            global_name: r.global_name,
+                            avatar: r.avatar,
+                            initial: r.initial,
+                            created_at: r.created_at,
+                            application_status: r.application_status,
+                            form_responses: r.form_responses.into_iter().map(|fr| FormResponse {
+                                field_type: fr.field_type,
+                                label: fr.label,
+                                response: fr.response,
+                            }).collect(),
+                            rejection_reason: r.rejection_reason,
+                        })
+                        .collect()),
+                    Err(err) => Err(format!("{err:#}")),
+                };
+                let _ = events.send(Event::JoinRequestsLoaded {
+                    server,
+                    status,
+                    requests,
+                });
+            }
+            PeopleWork::ActJoinRequest { user, approve } => {
+                let result = match discord.act_join_request(&guild, &user, approve, None).await {
+                    Ok(_) => Ok(()),
+                    Err(err) => Err(format!("{err:#}")),
+                };
+                let _ = events.send(Event::JoinRequestActed {
+                    server,
+                    user,
+                    approve,
+                    result,
+                });
             }
         }
     });

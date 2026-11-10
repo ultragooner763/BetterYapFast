@@ -3,7 +3,7 @@
 //! id. Discord sends them in chunks; the page keeps those fetched and asks
 //! for the next once a page goes past them, as Discord's client does.
 
-use crate::chat::{ListedMember, MembersQuery};
+use crate::chat::{JoinRequest, ListedMember, MembersQuery};
 
 /// How many members Discord sends at a time, at least, as Discord's client
 /// asks: five pages, or 250; a chunk this full may have more after it.
@@ -30,6 +30,13 @@ pub enum MemberInput {
     Sort(u8),
     Page(usize),
     PageSize(usize),
+    /// Tab: 0 All Members, 1 Pending, 2 Rejected, 3 Approved
+    Tab(u8),
+    /// Approve join request
+    Approve(String),
+    /// Reject join request
+    Reject(String),
+    RefreshRequests,
 }
 
 /// Members, as fetched so far.
@@ -54,6 +61,12 @@ pub struct MembersPage {
     pub asking: Option<MembersQuery>,
     /// Discord is indexing the server first.
     pub indexing: bool,
+    /// Active tab: 0 All Members, 1 Pending, 2 Rejected, 3 Approved
+    pub tab: u8,
+    /// Join requests for membership screening
+    pub applications: Vec<JoinRequest>,
+    pub applications_fetching: bool,
+    pub pending_count: usize,
 }
 
 impl MembersPage {
@@ -69,9 +82,36 @@ impl MembersPage {
             page_size: MEMBER_PAGE_SIZES[0],
             asking: None,
             indexing: false,
+            tab: 0,
+            applications: vec![],
+            applications_fetching: false,
+            pending_count: 0,
         };
         page.take(&MembersQuery::default(), members, total);
         page
+    }
+
+    pub fn set_tab(&mut self, tab: u8) {
+        self.tab = tab;
+    }
+
+    pub fn set_applications(&mut self, apps: Vec<JoinRequest>) {
+        self.applications = apps;
+        self.applications_fetching = false;
+        self.pending_count = self
+            .applications
+            .iter()
+            .filter(|a| a.application_status.eq_ignore_ascii_case("pending"))
+            .count();
+    }
+
+    pub fn remove_application(&mut self, user_id: &str) {
+        self.applications.retain(|a| a.user_id != user_id);
+        self.pending_count = self
+            .applications
+            .iter()
+            .filter(|a| a.application_status.eq_ignore_ascii_case("pending"))
+            .count();
     }
 
     pub fn fetching(&self) -> bool {

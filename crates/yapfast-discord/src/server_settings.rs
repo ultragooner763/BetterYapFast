@@ -475,6 +475,98 @@ pub fn parse_roles(roles: &Value) -> Vec<Role> {
     roles
 }
 
+/// A question's response in a membership screening application.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct FormResponse {
+    pub field_type: String,
+    pub label: String,
+    pub response: String,
+}
+
+/// A member join request as Membership Screening / Join Requests shows it.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct JoinRequest {
+    pub id: String,
+    pub user_id: String,
+    pub username: String,
+    pub global_name: Option<String>,
+    pub avatar: String,
+    pub initial: String,
+    pub created_at: String,
+    pub application_status: String,
+    pub form_responses: Vec<FormResponse>,
+    pub rejection_reason: Option<String>,
+}
+
+/// Parses join requests from `GET /guilds/{id}/join-requests`.
+pub fn parse_join_requests(value: &Value) -> Vec<JoinRequest> {
+    let requests = value["guild_join_requests"]
+        .as_array()
+        .or_else(|| value.as_array())
+        .into_iter()
+        .flatten();
+
+    requests
+        .filter_map(|req| {
+            let user = &req["user"];
+            let user_id = req["user_id"]
+                .as_str()
+                .or_else(|| user["id"].as_str())?
+                .to_owned();
+            let username = user["username"].as_str().unwrap_or("Unknown").to_owned();
+            let global_name = user["global_name"].as_str().map(str::to_owned);
+            let avatar = ready::avatar(&user_id, user["avatar"].as_str());
+            let initial = global_name
+                .as_deref()
+                .or(Some(&username))
+                .and_then(|s| s.chars().next())
+                .unwrap_or('?')
+                .to_uppercase()
+                .to_string();
+            let created_at = req["created_at"].as_str().unwrap_or_default().to_owned();
+            let application_status = req["application_status"]
+                .as_str()
+                .unwrap_or("PENDING")
+                .to_owned();
+            let rejection_reason = req["rejection_reason"].as_str().map(str::to_owned);
+
+            let form_responses = req["form_responses"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|fr| FormResponse {
+                    field_type: fr["field_type"].as_str().unwrap_or_default().to_owned(),
+                    label: fr["label"].as_str().unwrap_or_default().to_owned(),
+                    response: if let Some(s) = fr["response"].as_str() {
+                        s.to_owned()
+                    } else if let Some(b) = fr["response"].as_bool() {
+                        if b {
+                            "Agreed".to_owned()
+                        } else {
+                            "Declined".to_owned()
+                        }
+                    } else {
+                        fr["response"].to_string()
+                    },
+                })
+                .collect();
+
+            Some(JoinRequest {
+                id: req["id"].as_str().unwrap_or_default().to_owned(),
+                user_id,
+                username,
+                global_name,
+                avatar,
+                initial,
+                created_at,
+                application_status,
+                form_responses,
+                rejection_reason,
+            })
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

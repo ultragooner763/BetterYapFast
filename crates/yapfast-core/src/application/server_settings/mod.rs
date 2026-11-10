@@ -263,6 +263,30 @@ impl Application {
         load(server, section)
     }
 
+    /// Opens a Discord server's settings at a specific section.
+    pub(super) fn open_server_settings_section(
+        &mut self,
+        place: String,
+        section: SettingsSection,
+    ) -> Vec<Effect> {
+        let guild = discord::parse_server(&place)
+            .or_else(|| discord::parse_room(&place).map(|(guild, _)| guild));
+        let Some(server) = guild.map(discord::server_id) else {
+            return vec![];
+        };
+        self.state.server_settings = Some(ServerSettings {
+            server: server.clone(),
+            section,
+            page: None,
+            reading: None,
+            saving: false,
+            error: None,
+            nudge: 0,
+            ownership: None,
+        });
+        load(server, section)
+    }
+
     /// Goes to another page, unless the draft has changes, which the bar
     /// asks to reset or save first.
     pub(super) fn server_settings_section(&mut self, section: SettingsSection) -> Vec<Effect> {
