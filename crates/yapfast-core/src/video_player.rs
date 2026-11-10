@@ -636,6 +636,7 @@ fn play_sound(mut output: Output<f32>, shared: &Shared) {
     let mut generation = None;
     let mut flushed = true;
     let mut chunk = Vec::with_capacity(frames * CHANNELS);
+    let mut carry: Option<[f32; 2]> = None;
     loop {
         let latency = output.latency().as_millis() as u64;
         let mut state = shared.lock();
@@ -644,6 +645,7 @@ fn play_sound(mut output: Output<f32>, shared: &Shared) {
         }
         if !state.playing || state.clock.since.is_none() || generation != Some(state.generation) {
             generation = Some(state.generation);
+            carry = None;
             if !flushed {
                 drop(state);
                 output.flush();
@@ -661,21 +663,28 @@ fn play_sound(mut output: Output<f32>, shared: &Shared) {
         // What's written now is heard after the speakers' latency.
         let speed = state.clock.speed;
         let is_normal_speed = (speed - 1.0).abs() < 0.05;
+        let is_2x = (speed - 2.0).abs() < 0.05;
         let target = state.clock.now() + latency;
         chunk.clear();
         while chunk.len() < frames * CHANNELS {
             let wanted = frames - chunk.len() / CHANNELS;
-            let Some(sound) = state.sound.front_mut() else {
-                break;
-            };
-            let time = sound.next_time();
+            let State {
+                sound: sound_queue,
+                sound_frames,
+                ..
+            } = &mut *state;
             if is_normal_speed {
+                carry = None;
+                let Some(sound) = sound_queue.front_mut() else {
+                    break;
+                };
+                let time = sound.next_time();
                 if time + SOUND_SLACK_MS < target {
                     // Behind the clock: skip to it.
                     let behind = ((target - time) * u64::from(RATE) / 1000) as usize;
                     let skipped = behind.min(sound.frames_left());
                     sound.at += skipped * CHANNELS;
-                    state.sound_frames -= skipped;
+                    *sound_frames -= skipped;
                 } else if time > target + SOUND_SLACK_MS {
                     // Ahead of it: silence until it's due.
                     let early = ((time - target) * u64::from(RATE) / 1000) as usize;
@@ -685,16 +694,92 @@ fn play_sound(mut output: Output<f32>, shared: &Shared) {
                     let taken = wanted.min(sound.frames_left());
                     chunk.extend_from_slice(&sound.samples[sound.at..sound.at + taken * CHANNELS]);
                     sound.at += taken * CHANNELS;
-                    state.sound_frames -= taken;
+                    *sound_frames -= taken;
+                }
+                if sound.frames_left() == 0 {
+                    sound_queue.pop_front();
+                }
+            } else if is_2x {
+                // Dedicated 2X anti-aliased box-filtered playback:
+                // Pairs adjacent samples ((a + b) * 0.5) to remove Nyquist aliasing harmonics.
+                if let Some(a) = carry.take() {
+                    let Some(sound) = sound_queue.front_mut() else {
+                        carry = Some(a);
+                        break;
+                    };
+                    if sound.frames_left() > 0 {
+                        let b_l = sound.samples[sound.at];
+                        let b_r = sound.samples[sound.at + 1];
+                        sound.at += CHANNELS;
+                        *sound_frames -= 1;
+                        chunk.push((a[0] + b_l) * 0.5);
+                        chunk.push((a[1] + b_r) * 0.5);
+                        if sound.frames_left() == 0 {
+                            sound_queue.pop_front();
+                        }
+                        continue;
+                    } else {
+                        sound_queue.pop_front();
+                        carry = Some(a);
+                        continue;
+                    }
+                }
+                let Some(sound) = sound_queue.front_mut() else {
+                    break;
+                };
+                let time = sound.next_time();
+                let slack = SOUND_SLACK_MS * 4;
+                if time + slack < target {
+                    let behind = (((target - time) * u64::from(RATE) / 1000) as usize / 2) * 2;
+                    let skipped = behind.min(sound.frames_left() / 2 * 2);
+                    if skipped > 0 {
+                        sound.at += skipped * CHANNELS;
+                        *sound_frames -= skipped;
+                    }
+                } else if time > target + slack {
+                    let early = (((time - target) * u64::from(RATE) / 2000) as usize).min(wanted);
+                    chunk.resize(chunk.len() + early * CHANNELS, 0.0);
+                    break;
+                } else {
+                    let left = sound.frames_left();
+                    let pairs = wanted.min(left / 2);
+                    if pairs > 0 {
+                        for p in 0..pairs {
+                            let off = sound.at + p * (2 * CHANNELS);
+                            let a_l = sound.samples[off];
+                            let a_r = sound.samples[off + 1];
+                            let b_l = sound.samples[off + 2];
+                            let b_r = sound.samples[off + 3];
+                            chunk.push((a_l + b_l) * 0.5);
+                            chunk.push((a_r + b_r) * 0.5);
+                        }
+                        let consumed = pairs * 2;
+                        sound.at += consumed * CHANNELS;
+                        *sound_frames -= consumed;
+                    }
+                    if sound.frames_left() == 1 && chunk.len() < frames * CHANNELS {
+                        let a_l = sound.samples[sound.at];
+                        let a_r = sound.samples[sound.at + 1];
+                        sound.at += CHANNELS;
+                        *sound_frames -= 1;
+                        carry = Some([a_l, a_r]);
+                    }
+                    if sound.frames_left() == 0 {
+                        sound_queue.pop_front();
+                    }
                 }
             } else {
-                // Speed != 1.0: resample audio continuously with speed step
+                // General speed linear resampling
+                let Some(sound) = sound_queue.front_mut() else {
+                    break;
+                };
+                let time = sound.next_time();
                 let slack = (SOUND_SLACK_MS as f64 * speed) as u64;
                 if time + slack < target {
                     let behind = (((target - time) as f64 * (RATE as f64) / 1000.0) as usize)
                         .min(sound.frames_left());
                     sound.at += behind * CHANNELS;
-                    state.sound_frames -= behind;
+                    *sound_frames -= behind;
                 } else if time > target + slack {
                     let early = (((time - target) as f64 * (RATE as f64) / (1000.0 * speed)) as usize)
                         .min(wanted);
@@ -702,24 +787,9 @@ fn play_sound(mut output: Output<f32>, shared: &Shared) {
                     break;
                 } else {
                     let left = sound.frames_left();
-                    if left == 0 {
-                        state.sound.pop_front();
-                        continue;
-                    }
-                    let max_out = if speed > 1.0 {
-                        ((left.saturating_sub(1) as f64) / speed).floor() as usize
-                    } else {
-                        left
-                    };
-                    let count = wanted.min(max_out).max(1).min(wanted);
-                    if left <= 1 {
-                        let s0 = sound.samples[sound.at];
-                        let s1 = sound.samples[sound.at + 1.min(CHANNELS - 1)];
-                        chunk.push(s0);
-                        chunk.push(s1);
-                        sound.at += left * CHANNELS;
-                        state.sound_frames -= left;
-                    } else {
+                    let max_out = ((left.saturating_sub(1) as f64) / speed).floor() as usize;
+                    let count = wanted.min(max_out);
+                    if count > 0 {
                         for i in 0..count {
                             let in_pos = i as f64 * speed;
                             let idx0 = in_pos.floor() as usize;
@@ -735,19 +805,18 @@ fn play_sound(mut output: Output<f32>, shared: &Shared) {
                         }
                         let in_consumed = ((count as f64 * speed).round() as usize).min(left);
                         sound.at += in_consumed * CHANNELS;
-                        state.sound_frames -= in_consumed;
+                        *sound_frames -= in_consumed;
+                    } else {
+                        sound.at += left * CHANNELS;
+                        *sound_frames -= left;
+                    }
+                    if sound.frames_left() == 0 {
+                        sound_queue.pop_front();
                     }
                 }
             }
-            if state
-                .sound
-                .front()
-                .is_some_and(|sound| sound.frames_left() == 0)
-            {
-                state.sound.pop_front();
-            }
         }
-        // Nothing to play keeps the speakers fed, so their latency holds.
+                // Nothing to play keeps the speakers fed, so their latency holds.
         chunk.resize(frames * CHANNELS, 0.0);
         let volume = state.volume;
         drop(state);
