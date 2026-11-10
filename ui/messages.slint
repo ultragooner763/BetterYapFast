@@ -2302,13 +2302,13 @@ export component VideoViewer inherits Rectangle {
         }
         if root.speed-2x: Rectangle {
             x: (parent.width - self.width) / 2; y: 76px;
-            width: 114px; height: 32px; border-radius: 16px;
-            background: #000000cc; border-width: 1px; border-color: Theme.accent.with-alpha(0.6);
-            drop-shadow-blur: 16px; drop-shadow-color: #00000080;
+            width: 76px; height: 30px; border-radius: 15px;
+            background: #000000d9; border-width: 1px; border-color: #ffffff33;
+            drop-shadow-blur: 16px; drop-shadow-color: #00000099;
             HorizontalLayout {
-                alignment: center; spacing: 6px;
-                Image { source: @image-url("icons/chevrons-right.svg"); width: 14px; height: 14px; colorize: Theme.accent; vertical-alignment: center; }
-                Text { text: "2X Speed"; color: #ffffff; font-size: 13px; font-weight: 700; vertical-alignment: center; }
+                alignment: center; spacing: 7px;
+                Image { source: @image-url("icons/play-triangles.svg"); width: 14px; height: 11px; colorize: #ffffff; vertical-alignment: center; }
+                Text { text: "2X"; color: #ffffff; font-size: 13px; font-weight: 700; vertical-alignment: center; }
             }
         }
         HorizontalLayout {

@@ -1315,6 +1315,8 @@ impl GlyphRenderer for SkiaItemRenderer<'_> {
             .map(|g| (g.id as skia_safe::GlyphId, skia_safe::Point::new(g.x, g.y + y_offset.get())))
             .unzip();
 
+        let mut brush = brush;
+        brush.set_anti_alias(true);
         self.canvas.draw_glyphs_at(
             &glyph_ids,
             skia_safe::canvas::GlyphPositions::Points(&glyph_positions),
